@@ -1,0 +1,29 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "npm install && npm run prisma:generate && npm run build"
+  },
+  "deploy": {
+    "startCommand": "npm run prisma:migrate && npm start",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "healthcheck": {
+    "path": "/health",
+    "timeout": 30,
+    "interval": 60
+  },
+  "crons": [
+    {
+      "name": "Reset Monthly Quotas",
+      "schedule": "0 0 * * *",
+      "command": "npm run cron:quotas"
+    },
+    {
+      "name": "Send Quota Warnings",
+      "schedule": "0 */6 * * *",
+      "command": "npm run cron:warnings"
+    }
+  ]
+}

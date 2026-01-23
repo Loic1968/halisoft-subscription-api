@@ -1,0 +1,360 @@
+// ═══════════════════════════════════════════════════════════════
+// HaliSoft Subscription System - Prisma Schema
+// Configuration-first architecture - NO hardcoded pricing or features
+// ═══════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// USER MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+model User {
+  id                String         @id @default(uuid())
+  email             String         @unique
+  passwordHash      String         @map("password_hash")
+  firstName         String?        @map("first_name")
+  lastName          String?        @map("last_name")
+  role              UserRole       @default(USER)
+  isActive          Boolean        @default(true) @map("is_active")
+  emailVerified     Boolean        @default(false) @map("email_verified")
+  lastLoginAt       DateTime?      @map("last_login_at")
+
+  subscriptions     Subscription[]
+  tenantMemberships TenantMember[]
+
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUBSCRIPTION PLANS - Fully configurable via admin dashboard
+// ═══════════════════════════════════════════════════════════════
+
+model SubscriptionPlan {
+  id                String    @id @default(uuid())
+  name              String
+  slug              String    @unique
+  tagline           String?
+  description       String?
+
+  // Pricing - Can be modified without redeploying
+  basePrice         Decimal?  @map("base_price") @db.Decimal(10, 2)
+  billingPeriod     String    @default("monthly") @map("billing_period") // monthly, yearly
+  isCustomPricing   Boolean   @default(false) @map("is_custom_pricing")
+
+  // Display & Marketing
+  isActive          Boolean   @default(true) @map("is_active")
+  isPopular         Boolean   @default(false) @map("is_popular")
+  sortOrder         Int       @default(0) @map("sort_order")
+
+  // PayPal Integration
+  paypalPlanId      String?   @unique @map("paypal_plan_id")
+  paypalProductId   String?   @map("paypal_product_id")
+
+  // Relations
+  features          PlanFeature[]
+  additionalFeatures PlanAdditionalFeature[]
+  subscriptions     Subscription[]
+
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("subscription_plans")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AI COMPONENTS - Modular AI features that can be sold separately
+// ═══════════════════════════════════════════════════════════════
+
+model AIComponent {
+  id                    String    @id @default(uuid())
+  name                  String
+  slug                  String    @unique
+  description           String?
+  category              String    // document_analysis, credit_analysis, financial_analysis, etc.
+
+  // API Configuration
+  apiEndpoint           String?   @map("api_endpoint")
+  requiresClaudeAPI     Boolean   @default(true) @map("requires_claude_api")
+  baseTokenCost         Int       @default(1000) @map("base_token_cost") // Average Claude tokens per operation
+
+  // Availability
+  isActive              Boolean   @default(true) @map("is_active")
+
+  // Relations
+  planFeatures          PlanFeature[]
+  usageTracking         UsageTracking[]
+
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("ai_components")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLAN FEATURES - Mapping between Plans and AI Components with limits
+// ═══════════════════════════════════════════════════════════════
+
+model PlanFeature {
+  id                String            @id @default(uuid())
+
+  // Relations
+  planId            String            @map("plan_id")
+  plan              SubscriptionPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  aiComponentId     String            @map("ai_component_id")
+  aiComponent       AIComponent       @relation(fields: [aiComponentId], references: [id], onDelete: Cascade)
+
+  // Feature Configuration
+  enabled           Boolean           @default(true)
+  limitValue        Int?              @map("limit_value") // NULL = unlimited
+  limitType         String            @default("count") @map("limit_type") // count, tokens, requests
+
+  // Display
+  displayName       String?           @map("display_name")
+  description       String?
+  displayOrder      Int               @default(0) @map("display_order")
+
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  @@unique([planId, aiComponentId])
+  @@map("plan_features")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ADDITIONAL FEATURES - Non-AI features (integrations, notifications, etc.)
+// ═══════════════════════════════════════════════════════════════
+
+model PlanAdditionalFeature {
+  id                String            @id @default(uuid())
+
+  planId            String            @map("plan_id")
+  plan              SubscriptionPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  featureKey        String            @map("feature_key") // crm_integration, slack_notifications, etc.
+  featureValue      Json?             @map("feature_value") // JSON config for complex features
+  enabled           Boolean           @default(true)
+
+  displayName       String?           @map("display_name")
+  description       String?
+
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  @@unique([planId, featureKey])
+  @@map("plan_additional_features")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUBSCRIPTIONS - Active user subscriptions
+// ═══════════════════════════════════════════════════════════════
+
+model Subscription {
+  id                    String            @id @default(uuid())
+
+  // User & Plan
+  userId                String            @map("user_id")
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  planId                String            @map("plan_id")
+  plan                  SubscriptionPlan  @relation(fields: [planId], references: [id])
+
+  // Multi-tenant support
+  tenantId              String?           @map("tenant_id")
+  tenant                Tenant?           @relation(fields: [tenantId], references: [id])
+
+  // PayPal Integration
+  paypalSubscriptionId  String?           @unique @map("paypal_subscription_id")
+  paypalPlanId          String?           @map("paypal_plan_id")
+
+  // Status
+  status                SubscriptionStatus @default(PENDING)
+
+  // Billing Periods
+  currentPeriodStart    DateTime?         @map("current_period_start")
+  currentPeriodEnd      DateTime?         @map("current_period_end")
+
+  // Custom Pricing (for Enterprise)
+  customPricingJson     Json?             @map("custom_pricing_json")
+
+  // Cancellation
+  cancelledAt           DateTime?         @map("cancelled_at")
+  cancellationReason    String?           @map("cancellation_reason")
+  cancelAtPeriodEnd     Boolean           @default(false) @map("cancel_at_period_end")
+
+  // Relations
+  usageTracking         UsageTracking[]
+  paypalEvents          PayPalEvent[]
+
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+  SUSPENDED
+  EXPIRED
+}
+
+// ═══════════════════════════════════════════════════════════════
+// USAGE TRACKING - Track AI component usage and enforce quotas
+// ═══════════════════════════════════════════════════════════════
+
+model UsageTracking {
+  id                String        @id @default(uuid())
+
+  // Relations
+  subscriptionId    String        @map("subscription_id")
+  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  aiComponentId     String        @map("ai_component_id")
+  aiComponent       AIComponent   @relation(fields: [aiComponentId], references: [id])
+
+  // Usage Metrics
+  metricType        String        @map("metric_type") // executions, api_tokens, conversations
+  value             Int           @default(0)
+
+  // Billing Period
+  periodStart       DateTime      @map("period_start")
+  periodEnd         DateTime      @map("period_end")
+
+  // Additional data
+  metadata          Json?
+
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  @@index([subscriptionId, periodStart, periodEnd])
+  @@index([aiComponentId, periodStart])
+  @@map("usage_tracking")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MULTI-TENANT SUPPORT (Enterprise)
+// ═══════════════════════════════════════════════════════════════
+
+model Tenant {
+  id                    String          @id @default(uuid())
+  name                  String
+  slug                  String          @unique
+
+  // White-label Branding
+  brandingJson          Json?           @map("branding_json") // { logo_url, primary_color, etc. }
+  customDomain          String?         @unique @map("custom_domain")
+  subdomain             String?         @unique
+
+  // Custom AI Models
+  customAIModelsJson    Json?           @map("custom_ai_models_json")
+
+  // Feature Overrides
+  featureOverridesJson  Json?           @map("feature_overrides_json")
+
+  // SSO Configuration
+  ssoEnabled            Boolean         @default(false) @map("sso_enabled")
+  ssoProvider           String?         @map("sso_provider") // saml, oauth
+  ssoConfigJson         Json?           @map("sso_config_json")
+
+  // Status
+  isActive              Boolean         @default(true) @map("is_active")
+
+  // Relations
+  subscriptions         Subscription[]
+  members               TenantMember[]
+
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  @@map("tenants")
+}
+
+model TenantMember {
+  id                String          @id @default(uuid())
+
+  tenantId          String          @map("tenant_id")
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId            String          @map("user_id")
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role              TenantRole      @default(MEMBER)
+
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  @@unique([tenantId, userId])
+  @@map("tenant_members")
+}
+
+enum TenantRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAYPAL WEBHOOK EVENTS - Log all PayPal events for debugging
+// ═══════════════════════════════════════════════════════════════
+
+model PayPalEvent {
+  id                String        @id @default(uuid())
+
+  subscriptionId    String?       @map("subscription_id")
+  subscription      Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  eventType         String        @map("event_type")
+  eventId           String        @unique @map("event_id") // PayPal's event ID
+  payload           Json
+  processed         Boolean       @default(false)
+  processedAt       DateTime?     @map("processed_at")
+  errorMessage      String?       @map("error_message")
+
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  @@index([eventType])
+  @@index([processed])
+  @@map("paypal_events")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIT LOG - Track all admin changes to plans and pricing
+// ═══════════════════════════════════════════════════════════════
+
+model AuditLog {
+  id                String        @id @default(uuid())
+
+  userId            String        @map("user_id")
+  action            String        // PLAN_PRICE_UPDATED, FEATURE_TOGGLED, etc.
+  entityType        String        @map("entity_type") // subscription_plan, ai_component, etc.
+  entityId          String        @map("entity_id")
+
+  changesBefore     Json?         @map("changes_before")
+  changesAfter      Json?         @map("changes_after")
+
+  ipAddress         String?       @map("ip_address")
+  userAgent         String?       @map("user_agent")
+
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}

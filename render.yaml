@@ -1,0 +1,77 @@
+services:
+  # Main API Service
+  - type: web
+    name: halisoft-api
+    env: node
+    region: frankfurt  # ou oregon, singapore selon votre localisation
+    plan: starter  # Upgrade to standard for production
+    branch: main
+    buildCommand: npm install && npm run build && npx prisma generate
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: halisoft-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true  # Render génère automatiquement
+      - key: PAYPAL_MODE
+        value: sandbox  # Change to "live" for production
+      - key: PAYPAL_API_URL
+        value: https://api-m.sandbox.paypal.com  # Change to live URL for production
+      - key: PAYPAL_CLIENT_ID
+        sync: false  # Vous devez le définir manuellement
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false  # Vous devez le définir manuellement
+      - key: PAYPAL_PRODUCT_ID
+        sync: false  # Sera généré par sync-paypal
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false  # Vous devez le définir manuellement
+      - key: ANTHROPIC_API_KEY
+        sync: false  # Vous devez le définir manuellement
+      - key: APP_URL
+        value: https://halisoft-api.onrender.com  # Changez avec votre URL
+      - key: FRONTEND_URL
+        value: https://halisoft.onrender.com  # Changez avec votre URL frontend
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false  # Votre email
+      - key: SMTP_PASSWORD
+        sync: false  # Votre mot de passe email
+      - key: SMTP_FROM
+        value: noreply@halisoft.com
+
+  # PostgreSQL Database
+databases:
+  - name: halisoft-db
+    databaseName: halisoft
+    user: halisoft_user
+    region: frankfurt  # Même région que le service
+    plan: starter  # Upgrade to standard for production
+    postgresMajorVersion: 15
+
+# Cron Jobs (Render Pro plan requis)
+# Si vous êtes sur le plan gratuit, vous devrez utiliser un service externe comme cron-job.org
+# ou upgrade vers Render Pro
+cronjobs:
+  # Reset Monthly Quotas - Tous les jours à minuit UTC
+  - name: reset-quotas
+    schedule: "0 0 * * *"
+    command: npm run cron:quotas
+    region: frankfurt
+    plan: starter
+
+  # Send Quota Warnings - Toutes les 6 heures
+  - name: quota-warnings
+    schedule: "0 */6 * * *"
+    command: npm run cron:warnings
+    region: frankfurt
+    plan: starter

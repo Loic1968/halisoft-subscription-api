@@ -20,7 +20,7 @@ import adminRoutes from './routes/admin';
 
 // Initialize Express app
 const app: Express = express();
-const PORT = process.env.API_PORT || 3001;
+const PORT = process.env.PORT || process.env.API_PORT || 3001;
 
 // ═══════════════════════════════════════════════════════════════
 // MIDDLEWARE

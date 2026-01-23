@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: halisoft-db
+    environment:
+      POSTGRES_USER: halisoft_user
+      POSTGRES_PASSWORD: halisoft_pass
+      POSTGRES_DB: halisoft
+    ports:
+      - "5434:5432"
+    volumes:
+      - halisoft_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U halisoft_user -d halisoft"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: halisoft-api
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://halisoft_user:halisoft_pass@postgres:5432/halisoft
+      - JWT_SECRET=zabqvlQbdTYoAUmLek/LK7B6ulZp4YiRby2R3qOX9+E=
+      - PORT=3001
+      - NODE_ENV=development
+      - FRONTEND_URL=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "npx prisma migrate deploy && npm start"
+
+volumes:
+  halisoft_pgdata:

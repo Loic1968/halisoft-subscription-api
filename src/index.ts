@@ -147,6 +147,10 @@ async function startServer() {
     const requiredEnvVars = [
       'DATABASE_URL',
       'JWT_SECRET',
+    ];
+
+    // Optional env vars (warn if missing)
+    const optionalEnvVars = [
       'PAYPAL_CLIENT_ID',
       'PAYPAL_CLIENT_SECRET',
       'ANTHROPIC_API_KEY',
@@ -155,6 +159,12 @@ async function startServer() {
     for (const envVar of requiredEnvVars) {
       if (!process.env[envVar]) {
         throw new Error(`Missing required environment variable: ${envVar}`);
+      }
+    }
+
+    for (const envVar of optionalEnvVars) {
+      if (!process.env[envVar]) {
+        logger.warn(`Optional environment variable not set: ${envVar}`);
       }
     }
 

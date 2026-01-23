@@ -1,6 +1,6 @@
 {
   "name": "halisoft-subscription-system",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Configuration-first subscription system for AI components with PayPal integration",
   "main": "dist/index.js",
   "scripts": {

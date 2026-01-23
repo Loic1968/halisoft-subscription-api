@@ -10,12 +10,17 @@ import { logger } from '../utils/logger';
 
 const prisma = new PrismaClient();
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest {
   user?: {
     id: string;
     email: string;
     role: string;
   };
+  headers: {
+    authorization?: string;
+    [key: string]: string | string[] | undefined;
+  };
+  [key: string]: any;
 }
 
 /**

@@ -3,17 +3,17 @@
 // Handles all transactional emails for the subscription system
 // ═══════════════════════════════════════════════════════════════
 
-import nodemailer, { Transporter } from 'nodemailer';
+import * as nodemailer from 'nodemailer';
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 
 const prisma = new PrismaClient();
 
 export class EmailService {
-  private transporter: Transporter;
+  private transporter: nodemailer.Transporter;
 
   constructor() {
-    this.transporter = nodemailer.createTransporter({
+    this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',

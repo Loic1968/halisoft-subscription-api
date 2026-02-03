@@ -3,7 +3,7 @@
 // Handles all transactional emails for the subscription system
 // ═══════════════════════════════════════════════════════════════
 
-import * as nodemailer from 'nodemailer';
+import nodemailer from 'nodemailer';
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
 

@@ -1,8 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-// HaliSoft Subscription System - Prisma Schema
-// Configuration-first architecture - NO hardcoded pricing or features
-// ═══════════════════════════════════════════════════════════════
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,349 +7,2642 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// USER MANAGEMENT
-// ═══════════════════════════════════════════════════════════════
-
 model User {
-  id                String         @id @default(uuid())
-  email             String         @unique
-  passwordHash      String         @map("password_hash")
-  firstName         String?        @map("first_name")
-  lastName          String?        @map("last_name")
-  role              UserRole       @default(USER)
-  isActive          Boolean        @default(true) @map("is_active")
-  emailVerified     Boolean        @default(false) @map("email_verified")
-  lastLoginAt       DateTime?      @map("last_login_at")
+  id                                                                    Int                           @id @default(autoincrement())
+  email                                                                 String                        @unique @db.VarChar(255)
+  password                                                              String                        @db.VarChar(255)
+  firstName                                                             String?                       @map("first_name")
+  lastName                                                              String?                       @map("last_name")
+  company_name                                                          String?
+  reset_token                                                           String?
+  reset_expires_at                                                      DateTime?                     @db.Timestamp(6)
+  createdAt                                                             DateTime?                     @default(now()) @map("created_at") @db.Timestamp(6)
+  category                                                              String?                       @db.VarChar(50)
+  role                                                                  String?                       @db.VarChar(50)
+  company_id                                                            Int?
+  phone                                                                 String?                       @db.VarChar(50)
+  status                                                                String?                       @default("active") @db.VarChar(20)
+  updatedAt                                                             DateTime?                     @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  tenant_id                                                             Int
+  preferred_tenant_code                                                 String?
+  tenant_role                                                           String?                       @default("user")
+  reset_token_expiry                                                    DateTime?                     @db.Timestamp(6)
+  first_login                                                           DateTime?                     @db.Timestamp(6)
+  last_login                                                            DateTime?                     @db.Timestamp(6)
+  login_count                                                           Int?                          @default(0)
+  metadata                                                              Json?
+  address                                                               String?                       @db.VarChar(500)
+  city                                                                  String?                       @db.VarChar(100)
+  country                                                               String?                       @db.VarChar(100)
+  agent_commissions                                                     agent_commissions[]
+  agent_referrals                                                       agent_referrals[]
+  bank_account_audit_log                                                bank_account_audit_log[]
+  bank_accounts                                                         bank_accounts[]
+  buyer_magic_links                                                     buyer_magic_links[]
+  company                                                               company[]
+  halilab_risk_analysis_runs                                            halilab_risk_analysis_runs[]
+  halitrade_contracts                                                   halitrade_contracts[]
+  halitrade_letters_of_credit                                           halitrade_letters_of_credit[]
+  halitrade_shipments                                                   halitrade_shipments[]
+  invoice_analysis                                                      invoice_analysis[]
+  invoice_financing_reviews                                             invoice_financing_reviews[]
+  invoices                                                              invoices[]
+  kyc_verifications                                                     kyc_verifications[]
+  lead_invites                                                          lead_invites[]
+  past_trade_status_audit                                               past_trade_status_audit[]
+  past_trade_verifications_past_trade_verifications_decision_byTousers  past_trade_verifications[]    @relation("past_trade_verifications_decision_byTousers")
+  past_trade_verifications_past_trade_verifications_submitted_byTousers past_trade_verifications[]    @relation("past_trade_verifications_submitted_byTousers")
+  record_shares                                                         record_shares[]
+  referral_submissions                                                  referral_submissions[]
+  relationship_map_audit_log                                            relationship_map_audit_log[]
+  role_permissions                                                      role_permissions[]
+  sessions                                                              sessions[]
+  tenantMemberships                                                     TenantMember[]
+  transaction_audit_log                                                 transaction_audit_log[]
+  user_permissions_user_permissions_granted_byTousers                   user_permissions[]            @relation("user_permissions_granted_byTousers")
+  user_permissions_user_permissions_user_idTousers                      user_permissions[]            @relation("user_permissions_user_idTousers")
+  user_sessions                                                         user_sessions[]
+  user_subscriptions                                                    user_subscriptions[]
+  white_label_tenants                                                   white_label_tenants           @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  wallets                                                               wallets[]
 
-  subscriptions     Subscription[]
-  tenantMemberships TenantMember[]
-
-  createdAt         DateTime       @default(now()) @map("created_at")
-  updatedAt         DateTime       @updatedAt @map("updated_at")
-
+  @@index([category], map: "idx_users_category")
+  @@index([company_id], map: "idx_users_company_id")
+  @@index([email], map: "idx_users_email")
+  @@index([phone], map: "idx_users_phone")
+  @@index([status], map: "idx_users_status")
+  @@index([tenant_id], map: "idx_users_tenant")
+  @@index([tenant_id], map: "idx_users_tenant_id")
   @@map("users")
 }
 
-enum UserRole {
-  USER
-  ADMIN
-  SUPER_ADMIN
-}
-
-// ═══════════════════════════════════════════════════════════════
-// SUBSCRIPTION PLANS - Fully configurable via admin dashboard
-// ═══════════════════════════════════════════════════════════════
-
 model SubscriptionPlan {
-  id                String    @id @default(uuid())
-  name              String
-  slug              String    @unique
-  tagline           String?
-  description       String?
-
-  // Pricing - Can be modified without redeploying
-  basePrice         Decimal?  @map("base_price") @db.Decimal(10, 2)
-  billingPeriod     String    @default("monthly") @map("billing_period") // monthly, yearly
-  isCustomPricing   Boolean   @default(false) @map("is_custom_pricing")
-
-  // Display & Marketing
-  isActive          Boolean   @default(true) @map("is_active")
-  isPopular         Boolean   @default(false) @map("is_popular")
-  sortOrder         Int       @default(0) @map("sort_order")
-
-  // PayPal Integration
-  paypalPlanId      String?   @unique @map("paypal_plan_id")
-  paypalProductId   String?   @map("paypal_product_id")
-
-  // Relations
-  features          PlanFeature[]
+  id                 Int                     @id @default(autoincrement())
+  name               String
+  slug               String
+  tagline            String?
+  description        String?
+  basePrice          Decimal?                @map("base_price") @db.Decimal(10, 2)
+  billingPeriod      String?                 @default("monthly") @map("billing_period")
+  isCustomPricing    Boolean?                @default(false) @map("is_custom_pricing")
+  isActive           Boolean?                @default(true) @map("is_active")
+  isPopular          Boolean?                @default(false) @map("is_popular")
+  sortOrder          Int?                    @default(0) @map("sort_order")
+  paypalPlanId       String?                 @unique @map("paypal_plan_id")
+  paypalProductId    String?                 @map("paypal_product_id")
+  createdAt          DateTime?               @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime?               @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  currency           String?                 @default("EUR")
+  module             String                  @default("global") @db.VarChar(50)
   additionalFeatures PlanAdditionalFeature[]
-  subscriptions     Subscription[]
+  features           PlanFeature[]
+  subscriptions      Subscription[]
 
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-
+  @@unique([slug, module], map: "uniq_subscription_plans_slug_module")
+  @@index([isActive], map: "idx_subscription_plans_active")
+  @@index([module], map: "idx_subscription_plans_module")
+  @@index([slug], map: "idx_subscription_plans_slug")
   @@map("subscription_plans")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// AI COMPONENTS - Modular AI features that can be sold separately
-// ═══════════════════════════════════════════════════════════════
-
 model AIComponent {
-  id                    String    @id @default(uuid())
+  id                    Int             @id @default(autoincrement())
   name                  String
-  slug                  String    @unique
+  slug                  String          @unique
   description           String?
-  category              String    // document_analysis, credit_analysis, financial_analysis, etc.
-
-  // API Configuration
-  apiEndpoint           String?   @map("api_endpoint")
-  requiresClaudeAPI     Boolean   @default(true) @map("requires_claude_api")
-  baseTokenCost         Int       @default(1000) @map("base_token_cost") // Average Claude tokens per operation
-
-  // Availability
-  isActive              Boolean   @default(true) @map("is_active")
-
-  // Relations
+  category              String?
+  apiEndpoint           String?         @map("api_endpoint")
+  cost_per_use          Decimal?        @db.Decimal(10, 4)
+  default_monthly_quota Int?
+  icon                  String?
+  isActive              Boolean?        @default(true) @map("is_active")
+  createdAt             DateTime?       @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt             DateTime?       @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  requiresClaudeAPI     Boolean?        @default(true) @map("requires_claude_api")
+  baseTokenCost         Int?            @default(1000) @map("base_token_cost")
   planFeatures          PlanFeature[]
   usageTracking         UsageTracking[]
 
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-
+  @@index([isActive], map: "idx_ai_components_active")
+  @@index([slug], map: "idx_ai_components_slug")
   @@map("ai_components")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// PLAN FEATURES - Mapping between Plans and AI Components with limits
-// ═══════════════════════════════════════════════════════════════
-
 model PlanFeature {
-  id                String            @id @default(uuid())
-
-  // Relations
-  planId            String            @map("plan_id")
-  plan              SubscriptionPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
-
-  aiComponentId     String            @map("ai_component_id")
-  aiComponent       AIComponent       @relation(fields: [aiComponentId], references: [id], onDelete: Cascade)
-
-  // Feature Configuration
-  enabled           Boolean           @default(true)
-  limitValue        Int?              @map("limit_value") // NULL = unlimited
-  limitType         String            @default("count") @map("limit_type") // count, tokens, requests
-
-  // Display
-  displayName       String?           @map("display_name")
-  description       String?
-  displayOrder      Int               @default(0) @map("display_order")
-
-  createdAt         DateTime          @default(now()) @map("created_at")
-  updatedAt         DateTime          @updatedAt @map("updated_at")
+  id            Int              @id @default(autoincrement())
+  planId        Int              @map("plan_id")
+  aiComponentId Int              @map("ai_component_id")
+  monthly_quota Int?
+  enabled       Boolean?         @default(true)
+  displayOrder  Int?             @default(0) @map("display_order")
+  createdAt     DateTime?        @default(now()) @map("created_at") @db.Timestamp(6)
+  limitValue    Int?             @map("limit_value")
+  limitType     String?          @default("count") @map("limit_type") @db.VarChar(50)
+  displayName   String?          @map("display_name") @db.VarChar(255)
+  description   String?
+  updatedAt     DateTime?        @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  aiComponent   AIComponent      @relation(fields: [aiComponentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  plan          SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([planId, aiComponentId])
+  @@index([aiComponentId], map: "idx_plan_features_component")
+  @@index([planId], map: "idx_plan_features_plan")
   @@map("plan_features")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// ADDITIONAL FEATURES - Non-AI features (integrations, notifications, etc.)
-// ═══════════════════════════════════════════════════════════════
-
 model PlanAdditionalFeature {
-  id                String            @id @default(uuid())
+  id            Int              @id @default(autoincrement())
+  planId        Int              @map("plan_id")
+  feature_text  String
+  enabled       Boolean?         @default(true)
+  display_order Int?             @default(0)
+  createdAt     DateTime?        @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime?        @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  featureKey    String?          @map("feature_key") @db.VarChar(100)
+  featureValue  Json?            @map("feature_value")
+  displayName   String?          @map("display_name") @db.VarChar(255)
+  description   String?
+  plan          SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  planId            String            @map("plan_id")
-  plan              SubscriptionPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
-
-  featureKey        String            @map("feature_key") // crm_integration, slack_notifications, etc.
-  featureValue      Json?             @map("feature_value") // JSON config for complex features
-  enabled           Boolean           @default(true)
-
-  displayName       String?           @map("display_name")
-  description       String?
-
-  createdAt         DateTime          @default(now()) @map("created_at")
-  updatedAt         DateTime          @updatedAt @map("updated_at")
-
-  @@unique([planId, featureKey])
+  @@index([planId], map: "idx_plan_additional_features_plan")
   @@map("plan_additional_features")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// SUBSCRIPTIONS - Active user subscriptions
-// ═══════════════════════════════════════════════════════════════
-
 model Subscription {
-  id                    String            @id @default(uuid())
+  id                   Int              @id @default(autoincrement())
+  tenantId             Int              @map("tenant_id")
+  userId               Int?             @map("user_id")
+  planId               Int              @map("plan_id")
+  status               String?          @default("active")
+  currentPeriodStart   DateTime         @map("current_period_start") @db.Timestamp(6)
+  currentPeriodEnd     DateTime         @map("current_period_end") @db.Timestamp(6)
+  cancelAtPeriodEnd    Boolean?         @default(false) @map("cancel_at_period_end")
+  cancelledAt          DateTime?        @map("cancelled_at") @db.Timestamp(6)
+  paypalSubscriptionId String?          @unique @map("paypal_subscription_id")
+  paypal_payer_id      String?
+  metadata             Json?            @default("{}")
+  createdAt            DateTime?        @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt            DateTime?        @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  paypalPlanId         String?          @map("paypal_plan_id") @db.VarChar(255)
+  cancellationReason   String?          @map("cancellation_reason")
+  customPricingJson    Json?            @map("custom_pricing_json")
+  paypalEvents         PayPalEvent[]
+  plan                 SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  usageTracking        UsageTracking[]
 
-  // User & Plan
-  userId                String            @map("user_id")
-  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  planId                String            @map("plan_id")
-  plan                  SubscriptionPlan  @relation(fields: [planId], references: [id])
-
-  // Multi-tenant support
-  tenantId              String?           @map("tenant_id")
-  tenant                Tenant?           @relation(fields: [tenantId], references: [id])
-
-  // PayPal Integration
-  paypalSubscriptionId  String?           @unique @map("paypal_subscription_id")
-  paypalPlanId          String?           @map("paypal_plan_id")
-
-  // Status
-  status                SubscriptionStatus @default(PENDING)
-
-  // Billing Periods
-  currentPeriodStart    DateTime?         @map("current_period_start")
-  currentPeriodEnd      DateTime?         @map("current_period_end")
-
-  // Custom Pricing (for Enterprise)
-  customPricingJson     Json?             @map("custom_pricing_json")
-
-  // Cancellation
-  cancelledAt           DateTime?         @map("cancelled_at")
-  cancellationReason    String?           @map("cancellation_reason")
-  cancelAtPeriodEnd     Boolean           @default(false) @map("cancel_at_period_end")
-
-  // Relations
-  usageTracking         UsageTracking[]
-  paypalEvents          PayPalEvent[]
-
-  createdAt             DateTime          @default(now()) @map("created_at")
-  updatedAt             DateTime          @updatedAt @map("updated_at")
-
+  @@index([paypalSubscriptionId], map: "idx_subscriptions_paypal")
+  @@index([planId], map: "idx_subscriptions_plan")
+  @@index([status], map: "idx_subscriptions_status")
+  @@index([tenantId], map: "idx_subscriptions_tenant")
+  @@index([userId], map: "idx_subscriptions_user")
   @@map("subscriptions")
 }
 
-enum SubscriptionStatus {
-  PENDING
-  ACTIVE
-  CANCELLED
-  SUSPENDED
-  EXPIRED
-}
-
-// ═══════════════════════════════════════════════════════════════
-// USAGE TRACKING - Track AI component usage and enforce quotas
-// ═══════════════════════════════════════════════════════════════
-
 model UsageTracking {
-  id                String        @id @default(uuid())
+  id                 Int          @id @default(autoincrement())
+  tenant_id          Int
+  subscriptionId     Int          @map("subscription_id")
+  aiComponentId      Int          @map("ai_component_id")
+  periodStart        DateTime     @map("period_start") @db.Date
+  periodEnd          DateTime     @map("period_end") @db.Date
+  usage_count        Int?         @default(0)
+  quota_limit        Int?
+  quota_exceeded     Boolean?     @default(false)
+  estimated_cost_usd Decimal?     @default(0) @db.Decimal(10, 2)
+  createdAt          DateTime?    @default(now()) @map("created_at") @db.Timestamp(6)
+  updated_at         DateTime?    @default(now()) @db.Timestamp(6)
+  metricType         String?      @default("executions") @map("metric_type") @db.VarChar(50)
+  value              Int?         @default(0)
+  metadata           Json?
+  aiComponent        AIComponent  @relation(fields: [aiComponentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subscription       Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants            Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  // Relations
-  subscriptionId    String        @map("subscription_id")
-  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-
-  aiComponentId     String        @map("ai_component_id")
-  aiComponent       AIComponent   @relation(fields: [aiComponentId], references: [id])
-
-  // Usage Metrics
-  metricType        String        @map("metric_type") // executions, api_tokens, conversations
-  value             Int           @default(0)
-
-  // Billing Period
-  periodStart       DateTime      @map("period_start")
-  periodEnd         DateTime      @map("period_end")
-
-  // Additional data
-  metadata          Json?
-
-  createdAt         DateTime      @default(now()) @map("created_at")
-
-  @@index([subscriptionId, periodStart, periodEnd])
-  @@index([aiComponentId, periodStart])
+  @@unique([subscriptionId, aiComponentId, periodStart])
+  @@index([aiComponentId], map: "idx_usage_tracking_component")
+  @@index([periodStart, periodEnd], map: "idx_usage_tracking_period")
+  @@index([subscriptionId], map: "idx_usage_tracking_subscription")
+  @@index([tenant_id], map: "idx_usage_tracking_tenant")
   @@map("usage_tracking")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// MULTI-TENANT SUPPORT (Enterprise)
-// ═══════════════════════════════════════════════════════════════
-
 model Tenant {
-  id                    String          @id @default(uuid())
-  name                  String
-  slug                  String          @unique
+  id                  Int                @id @default(autoincrement())
+  name                String
+  slug                String             @unique
+  domain              String?
+  subscription_tier   String?            @default("free")
+  subscription_status String?            @default("active")
+  max_users           Int?               @default(5)
+  max_storage_gb      Int?               @default(10)
+  features            Json?              @default("{}")
+  settings            Json?              @default("{}")
+  logo_url            String?
+  primary_color       String?            @default("#4F46E5")
+  admin_email         String
+  admin_name          String?
+  billing_email       String?
+  isActive            Boolean?           @default(true) @map("is_active")
+  trial_ends_at       DateTime?          @db.Timestamp(6)
+  suspended_at        DateTime?          @db.Timestamp(6)
+  suspended_reason    String?
+  createdAt           DateTime?          @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt           DateTime?          @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  type                String?            @db.VarChar(50)
+  status              String?            @db.VarChar(50)
+  documents           documents[]
+  subscriptions       Subscription[]
+  tenant_audit_log    tenant_audit_log[]
+  members             TenantMember[]
+  tenant_usage        tenant_usage[]
+  usage_tracking      UsageTracking[]
 
-  // White-label Branding
-  brandingJson          Json?           @map("branding_json") // { logo_url, primary_color, etc. }
-  customDomain          String?         @unique @map("custom_domain")
-  subdomain             String?         @unique
-
-  // Custom AI Models
-  customAIModelsJson    Json?           @map("custom_ai_models_json")
-
-  // Feature Overrides
-  featureOverridesJson  Json?           @map("feature_overrides_json")
-
-  // SSO Configuration
-  ssoEnabled            Boolean         @default(false) @map("sso_enabled")
-  ssoProvider           String?         @map("sso_provider") // saml, oauth
-  ssoConfigJson         Json?           @map("sso_config_json")
-
-  // Status
-  isActive              Boolean         @default(true) @map("is_active")
-
-  // Relations
-  subscriptions         Subscription[]
-  members               TenantMember[]
-
-  createdAt             DateTime        @default(now()) @map("created_at")
-  updatedAt             DateTime        @updatedAt @map("updated_at")
-
+  @@index([isActive, subscription_status], map: "idx_tenants_active")
+  @@index([slug], map: "idx_tenants_slug")
   @@map("tenants")
 }
 
 model TenantMember {
-  id                String          @id @default(uuid())
-
-  tenantId          String          @map("tenant_id")
-  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  userId            String          @map("user_id")
-  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  role              TenantRole      @default(MEMBER)
-
-  createdAt         DateTime        @default(now()) @map("created_at")
+  id        Int       @id @default(autoincrement())
+  tenantId  Int       @map("tenant_id")
+  userId    Int       @map("user_id")
+  role      String?   @default("MEMBER") @db.VarChar(50)
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([tenantId, userId])
   @@map("tenant_members")
 }
 
-enum TenantRole {
-  OWNER
-  ADMIN
-  MEMBER
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PAYPAL WEBHOOK EVENTS - Log all PayPal events for debugging
-// ═══════════════════════════════════════════════════════════════
-
 model PayPalEvent {
-  id                String        @id @default(uuid())
+  id             Int           @id @default(autoincrement())
+  subscriptionId Int?          @map("subscription_id")
+  eventType      String        @map("event_type") @db.VarChar(100)
+  eventId        String        @unique @map("event_id") @db.VarChar(255)
+  payload        Json
+  processed      Boolean?      @default(false)
+  processedAt    DateTime?     @map("processed_at") @db.Timestamp(6)
+  errorMessage   String?       @map("error_message")
+  createdAt      DateTime?     @default(now()) @map("created_at") @db.Timestamp(6)
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  subscriptionId    String?       @map("subscription_id")
-  subscription      Subscription? @relation(fields: [subscriptionId], references: [id])
-
-  eventType         String        @map("event_type")
-  eventId           String        @unique @map("event_id") // PayPal's event ID
-  payload           Json
-  processed         Boolean       @default(false)
-  processedAt       DateTime?     @map("processed_at")
-  errorMessage      String?       @map("error_message")
-
-  createdAt         DateTime      @default(now()) @map("created_at")
-
-  @@index([eventType])
-  @@index([processed])
+  @@index([processed], map: "idx_paypal_events_processed")
+  @@index([eventType], map: "idx_paypal_events_type")
   @@map("paypal_events")
 }
 
-// ═══════════════════════════════════════════════════════════════
-// AUDIT LOG - Track all admin changes to plans and pricing
-// ═══════════════════════════════════════════════════════════════
-
 model AuditLog {
-  id                String        @id @default(uuid())
+  id            Int       @id @default(autoincrement())
+  userId        Int       @map("user_id")
+  action        String    @db.VarChar(100)
+  entityType    String    @map("entity_type") @db.VarChar(100)
+  entityId      Int       @map("entity_id")
+  changesBefore Json?     @map("changes_before")
+  changesAfter  Json?     @map("changes_after")
+  ipAddress     String?   @map("ip_address") @db.VarChar(45)
+  userAgent     String?   @map("user_agent")
+  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
 
-  userId            String        @map("user_id")
-  action            String        // PLAN_PRICE_UPDATED, FEATURE_TOGGLED, etc.
-  entityType        String        @map("entity_type") // subscription_plan, ai_component, etc.
-  entityId          String        @map("entity_id")
-
-  changesBefore     Json?         @map("changes_before")
-  changesAfter      Json?         @map("changes_after")
-
-  ipAddress         String?       @map("ip_address")
-  userAgent         String?       @map("user_agent")
-
-  createdAt         DateTime      @default(now()) @map("created_at")
-
-  @@index([userId])
-  @@index([entityType, entityId])
+  @@index([entityType, entityId], map: "idx_audit_logs_entity")
+  @@index([userId], map: "idx_audit_logs_user")
   @@map("audit_logs")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model agent_commissions {
+  id                                                                            Int                  @id @default(autoincrement())
+  agent_tenant_id                                                               Int
+  financing_request_id                                                          Int?
+  customer_tenant_id                                                            Int?
+  commission_amount                                                             Decimal              @db.Decimal(15, 2)
+  commission_rate                                                               Decimal              @db.Decimal(5, 2)
+  base_amount                                                                   Decimal              @db.Decimal(15, 2)
+  status                                                                        String?              @default("pending") @db.VarChar
+  approved_by                                                                   Int?
+  approved_at                                                                   DateTime?            @db.Timestamp(6)
+  transaction_id                                                                Int?
+  paid_at                                                                       DateTime?            @db.Timestamp(6)
+  notes                                                                         String?
+  created_at                                                                    DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at                                                                    DateTime?            @default(now()) @db.Timestamp(6)
+  white_label_tenants_agent_commissions_agent_tenant_idTowhite_label_tenants    white_label_tenants  @relation("agent_commissions_agent_tenant_idTowhite_label_tenants", fields: [agent_tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                                                                         User?                @relation(fields: [approved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  white_label_tenants_agent_commissions_customer_tenant_idTowhite_label_tenants white_label_tenants? @relation("agent_commissions_customer_tenant_idTowhite_label_tenants", fields: [customer_tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([agent_tenant_id], map: "idx_agent_commissions_agent")
+  @@index([status], map: "idx_agent_commissions_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model agent_referrals {
+  id                                                                          Int                 @id @default(autoincrement())
+  agent_tenant_id                                                             Int
+  customer_tenant_id                                                          Int
+  referred_by_user_id                                                         Int?
+  referral_code                                                               String?             @db.VarChar
+  referral_date                                                               DateTime            @default(dbgenerated("CURRENT_DATE")) @db.Date
+  status                                                                      String?             @default("active") @db.VarChar
+  commission_rate                                                             Decimal?            @db.Decimal(5, 2)
+  total_commission_earned                                                     Decimal?            @default(0.00) @db.Decimal(15, 2)
+  created_at                                                                  DateTime?           @default(now()) @db.Timestamp(6)
+  updated_at                                                                  DateTime?           @default(now()) @db.Timestamp(6)
+  white_label_tenants_agent_referrals_agent_tenant_idTowhite_label_tenants    white_label_tenants @relation("agent_referrals_agent_tenant_idTowhite_label_tenants", fields: [agent_tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  white_label_tenants_agent_referrals_customer_tenant_idTowhite_label_tenants white_label_tenants @relation("agent_referrals_customer_tenant_idTowhite_label_tenants", fields: [customer_tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                                                                       User?               @relation(fields: [referred_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([agent_tenant_id, customer_tenant_id])
+  @@index([agent_tenant_id], map: "idx_agent_referrals_agent")
+  @@index([customer_tenant_id], map: "idx_agent_referrals_customer")
+}
+
+model ai_analysis {
+  id            Int       @id @default(autoincrement())
+  entity_type   String    @db.VarChar(50)
+  entity_id     Int
+  analysis_type String    @db.VarChar(50)
+  result        Json
+  risk_level    String?   @db.VarChar(20)
+  risk_score    Int?
+  confidence    Decimal?  @db.Decimal(3, 2)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @default(now()) @db.Timestamp(6)
+  created_by    Int?
+
+  @@unique([entity_type, entity_id, analysis_type], map: "unique_entity_analysis")
+}
+
+model analytics_reports {
+  slug         String    @id
+  pdf          Bytes?
+  generated_at DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model analytics_uploads {
+  id             Int       @id @default(autoincrement())
+  user_id        Int?
+  slug           String
+  filename       String?
+  content        Bytes?
+  content_type   String?
+  uploaded_at    DateTime? @default(now()) @db.Timestamptz(6)
+  column_mapping Json?
+  ai_analysis    String?
+  ai_analysis_at DateTime? @db.Timestamptz(6)
+  original_data  Json?
+  processed_data Json?
+}
+
+model audit_log {
+  id          Int       @id @default(autoincrement())
+  user_id     Int?
+  action      String?
+  entity_type String?
+  entity_id   Int?
+  details     Json?     @default("{}")
+  ip_address  String?
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+  user_agent  String?
+  tenant_id   Int?
+  old_values  Json?
+  new_values  Json?
+  field_name  String?
+  user_email  String?
+  metadata    Json?
+  old_value   String?
+  new_value   String?
+
+  @@index([tenant_id], map: "idx_audit_log_tenant_id")
+}
+
+model bank_account_audit_log {
+  id                     Int            @id @default(autoincrement())
+  bank_account_id        Int?
+  bank_account_reference String?        @db.VarChar(100)
+  wallet_id              Int?
+  action                 String         @db.VarChar(50)
+  performed_by           Int?
+  performed_by_email     String?        @db.VarChar(255)
+  field_changed          String?        @db.VarChar(100)
+  old_value              String?
+  new_value              String?
+  changes_summary        Json?
+  ip_address             String?        @db.VarChar(50)
+  user_agent             String?
+  created_at             DateTime?      @default(now()) @db.Timestamptz(6)
+  bank_accounts          bank_accounts? @relation(fields: [bank_account_id], references: [id], onUpdate: NoAction)
+  users                  User?          @relation(fields: [performed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  wallets                wallets?       @relation(fields: [wallet_id], references: [id], onUpdate: NoAction)
+
+  @@index([bank_account_id], map: "idx_bank_audit_account_id")
+  @@index([created_at], map: "idx_bank_audit_created_at")
+  @@index([wallet_id], map: "idx_bank_audit_wallet_id")
+}
+
+model bank_accounts {
+  id                         Int                      @id @default(autoincrement())
+  wallet_id                  Int?
+  bank_name                  String                   @db.VarChar(255)
+  account_holder_name        String                   @db.VarChar(255)
+  account_number             String?                  @db.VarChar(100)
+  account_number_encrypted   String?
+  routing_number             String?                  @db.VarChar(50)
+  swift_code                 String?                  @db.VarChar(20)
+  iban                       String?                  @db.VarChar(50)
+  bank_country               String?                  @db.VarChar(100)
+  bank_address               String?
+  currency                   String?                  @default("USD") @db.VarChar(3)
+  account_type               String?                  @default("checking") @db.VarChar(50)
+  is_primary                 Boolean?                 @default(false)
+  is_verified                Boolean?                 @default(false)
+  verified_at                DateTime?                @db.Timestamptz(6)
+  verified_by                Int?
+  verification_method        String?                  @db.VarChar(50)
+  verification_document_path String?
+  status                     String?                  @default("pending") @db.VarChar(50)
+  notes                      String?
+  tenant_id                  Int?
+  created_at                 DateTime?                @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime?                @default(now()) @db.Timestamptz(6)
+  sort_code                  String?                  @db.VarChar(20)
+  bank_address_line1         String?                  @db.VarChar(255)
+  bank_address_line2         String?                  @db.VarChar(255)
+  bank_city                  String?                  @db.VarChar(100)
+  bank_state                 String?                  @db.VarChar(100)
+  bank_postal_code           String?                  @db.VarChar(20)
+  bank_document_url          String?                  @db.VarChar(500)
+  bank_document_filename     String?                  @db.VarChar(255)
+  bank_document_type         String?                  @db.VarChar(50)
+  bank_document_uploaded_at  DateTime?                @db.Timestamp(6)
+  verification_status        String?                  @db.VarChar(50)
+  verification_notes         String?
+  created_by                 Int?
+  reference_number           String?                  @db.VarChar(100)
+  bank_account_audit_log     bank_account_audit_log[]
+  white_label_tenants        white_label_tenants?     @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                      User?                    @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  wallets                    wallets?                 @relation(fields: [wallet_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([status], map: "idx_bank_accounts_status")
+  @@index([tenant_id], map: "idx_bank_accounts_tenant_id")
+  @@index([wallet_id], map: "idx_bank_accounts_wallet_id")
+}
+
+model buyer_magic_link_access_logs {
+  id                BigInt             @id @default(autoincrement())
+  link_id           String?            @db.Uuid
+  accessed_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  ip_address        String?            @db.VarChar(45)
+  user_agent        String?
+  success           Boolean
+  reason            String?
+  buyer_magic_links buyer_magic_links? @relation(fields: [link_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([link_id], map: "idx_buyer_magic_link_logs_link")
+}
+
+model buyer_magic_links {
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                    Int
+  noa_id                       String                         @db.Uuid
+  invoice_id                   Int?
+  token_hash                   String                         @unique
+  expires_at                   DateTime                       @db.Timestamptz(6)
+  created_by                   Int?
+  created_at                   DateTime?                      @default(now()) @db.Timestamptz(6)
+  used_at                      DateTime?                      @db.Timestamptz(6)
+  used_ip                      String?                        @db.VarChar(45)
+  used_user_agent              String?
+  last_accessed_at             DateTime?                      @db.Timestamptz(6)
+  status                       String?                        @default("active")
+  buyer_magic_link_access_logs buyer_magic_link_access_logs[]
+  users                        User?                          @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoices                     invoices?                      @relation(fields: [invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  noa_documents                noa_documents                  @relation(fields: [noa_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  white_label_tenants          white_label_tenants            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([expires_at], map: "idx_buyer_magic_links_expires")
+  @@index([noa_id], map: "idx_buyer_magic_links_noa")
+  @@index([tenant_id], map: "idx_buyer_magic_links_tenant")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model company {
+  id                                                                  Int                           @id @default(autoincrement())
+  user_id                                                             Int?
+  name                                                                String?
+  legal_name                                                          String?
+  company_name                                                        String?                       @db.VarChar(255)
+  registration_no                                                     String?
+  registration_number                                                 String?                       @db.VarChar(100)
+  country                                                             String?                       @db.VarChar(100)
+  industry                                                            String?
+  address                                                             String?
+  city                                                                String?                       @db.VarChar(100)
+  postal_code                                                         String?                       @db.VarChar(20)
+  phone                                                               String?                       @db.VarChar(50)
+  email                                                               String?                       @db.VarChar(255)
+  website                                                             String?                       @db.VarChar(255)
+  goods_and_services                                                  String?
+  annual_turnover                                                     Decimal?                      @db.Decimal
+  bank_name                                                           String?
+  bank_beneficiary                                                    String?
+  bank_account                                                        String?
+  bank_swift                                                          String?
+  bank_address                                                        String?
+  status                                                              String?
+  created_at                                                          DateTime?                     @default(now()) @db.Timestamp(6)
+  updated_at                                                          DateTime?                     @default(now()) @db.Timestamp(6)
+  product_source                                                      String?                       @default("haliflow") @db.VarChar(50)
+  kyc_status                                                          String?                       @db.VarChar(50)
+  tenant_id                                                           Int?
+  platform_tenant_id                                                  Int?
+  agent_tenant_id                                                     Int?
+  type                                                                String?                       @db.VarChar(50)
+  tenant_code                                                         String?                       @db.VarChar(50)
+  white_label_tenants_company_agent_tenant_idTowhite_label_tenants    white_label_tenants?          @relation("company_agent_tenant_idTowhite_label_tenants", fields: [agent_tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  white_label_tenants_company_platform_tenant_idTowhite_label_tenants white_label_tenants?          @relation("company_platform_tenant_idTowhite_label_tenants", fields: [platform_tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                                                               User?                         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  company_address                                                     company_address[]
+  company_contact                                                     company_contact[]
+  halitrade_contracts                                                 halitrade_contracts[]
+  halitrade_letters_of_credit                                         halitrade_letters_of_credit[]
+  halitrade_shipments                                                 halitrade_shipments[]
+  invoice_analysis                                                    invoice_analysis[]
+  invoice_financing_reviews                                           invoice_financing_reviews[]
+  invoices                                                            invoices[]
+  noa_documents_noa_documents_buyer_idTocompany                       noa_documents[]               @relation("noa_documents_buyer_idTocompany")
+  noa_documents_noa_documents_supplier_idTocompany                    noa_documents[]               @relation("noa_documents_supplier_idTocompany")
+  referral_submissions                                                referral_submissions[]
+  wallets                                                             wallets[]
+
+  @@index([agent_tenant_id], map: "idx_company_agent_tenant_id")
+  @@index([platform_tenant_id], map: "idx_company_platform_tenant_id")
+  @@index([product_source], map: "idx_company_product_source")
+  @@index([tenant_id], map: "idx_company_tenant_id")
+  @@index([user_id], map: "idx_company_user_id")
+}
+
+model company_address {
+  id          Int     @id @default(autoincrement())
+  company_id  Int
+  line1       String
+  line2       String?
+  city        String?
+  state       String?
+  postal_code String?
+  country     String?
+  type        String?
+  company     company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([company_id], map: "idx_company_address_company_id")
+}
+
+model company_contact {
+  id              Int       @id @default(autoincrement())
+  company_id      Int
+  name            String
+  email           String?
+  phone           String?
+  role            String?
+  full_name       String?
+  mobile          String?
+  department      String?
+  primary_contact Boolean?  @default(false)
+  created_by      String?
+  updated_by      String?
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @default(now()) @db.Timestamp(6)
+  platform_type   String?   @default("haliflow") @db.VarChar(50)
+  company         company   @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([platform_type], map: "idx_company_contact_platform_type")
+}
+
+model contract_analysis_records {
+  id              Int       @id @default(autoincrement())
+  user_id         Int?
+  company_id      Int?
+  file_name       String?   @db.VarChar(255)
+  file_path       String?
+  status          String?   @default("pending") @db.VarChar(50)
+  analysis_result Json?
+  risk_score      Int?
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([company_id], map: "idx_contract_analysis_company")
+  @@index([user_id], map: "idx_contract_analysis_user")
+}
+
+model contract_audit_log {
+  id          Int       @id @default(autoincrement())
+  contract_id Int?
+  user_id     Int?
+  action      String?   @db.VarChar(100)
+  details     Json?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model contract_status_audit {
+  id          Int       @id @default(autoincrement())
+  contract_id Int?
+  old_status  String?   @db.VarChar(50)
+  new_status  String?   @db.VarChar(50)
+  changed_by  Int?
+  reason      String?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model credit_limit_records {
+  id                  Int       @id @default(autoincrement())
+  record_code         String    @unique @db.VarChar(50)
+  trade_partner_id    Int?
+  relationship_map_id String?   @db.VarChar(50)
+  tenant_id           Int?
+  recommended_limit   Decimal?  @db.Decimal(15, 2)
+  approved_limit      Decimal?  @db.Decimal(15, 2)
+  risk_score          Int?
+  risk_level          String?   @db.VarChar(20)
+  analysis_summary    String?
+  ai_recommendation   String?
+  input_data          Json?
+  decision            String?   @db.VarChar(20)
+  decision_comments   String?
+  signature           Json?
+  created_by          String?   @db.VarChar(100)
+  created_at          DateTime? @default(now()) @db.Timestamp(6)
+  updated_at          DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([tenant_id], map: "idx_credit_limit_records_tenant_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model currency_rates {
+  id              Int       @id @default(autoincrement())
+  currency_code   String    @unique @db.VarChar(3)
+  rate_to_usd     Decimal   @db.Decimal(18, 10)
+  source          String?   @default("manual") @db.VarChar(100)
+  last_updated    DateTime? @default(now()) @db.Timestamp(6)
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @default(now()) @db.Timestamp(6)
+  base_currency   String?   @db.VarChar(10)
+  target_currency String?   @db.VarChar(10)
+  rate            Decimal?  @db.Decimal(18, 8)
+  fetched_at      DateTime? @db.Timestamp(6)
+
+  @@index([currency_code], map: "idx_currency_rates_code")
+  @@index([last_updated(sort: Desc)], map: "idx_currency_rates_updated")
+}
+
+model customer_agent_cases {
+  id          Int       @id @default(autoincrement())
+  tenant_id   Int?
+  user_id     Int?
+  company_id  Int?
+  case_number String?   @db.VarChar(100)
+  subject     String?   @db.VarChar(255)
+  description String?
+  status      String?   @default("open") @db.VarChar(50)
+  priority    String?   @default("medium") @db.VarChar(20)
+  assigned_to Int?
+  resolved_at DateTime? @db.Timestamp(6)
+  metadata    Json?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([tenant_id], map: "idx_customer_agent_cases_tenant")
+  @@index([user_id], map: "idx_customer_agent_cases_user")
+}
+
+model customer_agent_uploads {
+  id         Int       @id @default(autoincrement())
+  case_id    Int?
+  user_id    Int?
+  file_name  String?   @db.VarChar(255)
+  file_path  String?
+  file_type  String?   @db.VarChar(50)
+  file_size  Int?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model deposits {
+  id                  Int                  @id @default(autoincrement())
+  wallet_id           Int?
+  amount              Decimal              @db.Decimal(15, 2)
+  currency            String?              @default("USD") @db.VarChar(3)
+  source_bank         String?
+  status              String?              @default("pending") @db.VarChar(20)
+  reference_number    String?              @unique @db.VarChar(20)
+  created_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  approved_at         DateTime?            @db.Timestamptz(6)
+  declined_at         DateTime?            @db.Timestamptz(6)
+  admin_note          String?
+  idempotency_key     String?              @db.VarChar(255)
+  tenant_id           Int?
+  white_label_tenants white_label_tenants? @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  wallets             wallets?             @relation(fields: [wallet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([wallet_id, idempotency_key], map: "idx_deposits_wallet_idempotency")
+  @@index([tenant_id], map: "idx_deposits_tenant_id")
+  @@index([wallet_id], map: "idx_deposits_wallet_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model document {
+  id             Int       @id @default(autoincrement())
+  owner_type     String?
+  owner_id       Int
+  kind           String?
+  file_name      String?
+  url            String?
+  uploaded_at    DateTime? @default(now()) @db.Timestamp(6)
+  product_source String?   @default("haliflow") @db.VarChar(50)
+  tenant_id      Int?
+
+  @@index([tenant_id], map: "idx_document_tenant_id")
+}
+
+model document_analyses {
+  id               Int       @id @default(autoincrement())
+  document_id      Int?
+  user_id          Int?
+  analysis_type    String?   @db.VarChar(100)
+  result           Json?
+  confidence_score Decimal?  @db.Decimal(5, 4)
+  created_at       DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model documents {
+  id               Int       @id @default(autoincrement())
+  filename         String    @db.VarChar(255)
+  mime_type        String?   @default("application/pdf") @db.VarChar(100)
+  file_data        Bytes
+  file_size        Int?
+  uploaded_by      Int?
+  uploaded_at      DateTime? @default(now()) @db.Timestamp(6)
+  entity_type      String?   @db.VarChar(50)
+  entity_id        Int?
+  metadata         Json?     @default("{}")
+  product_source   String?   @default("haliflow") @db.VarChar(50)
+  tenant_id        Int?
+  user_id          Int?
+  company_id       Int?
+  trade_partner_id Int?
+  document_type    String?   @db.VarChar(100)
+  document_name    String?   @db.VarChar(255)
+  file_path        String?
+  upload_date      DateTime? @db.Timestamptz(6)
+  status           String?   @db.VarChar(50)
+  notes            String?
+  tenants          Tenant?   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([entity_type, entity_id], map: "idx_documents_entity")
+  @@index([product_source], map: "idx_documents_product_source")
+  @@index([tenant_id], map: "idx_documents_tenant")
+  @@index([tenant_id], map: "idx_documents_tenant_id")
+  @@index([uploaded_at], map: "idx_documents_uploaded_at")
+}
+
+model financial_analysis_records {
+  id              Int       @id @default(autoincrement())
+  user_id         Int?
+  company_id      Int?
+  file_name       String?   @db.VarChar(255)
+  file_path       String?
+  status          String?   @default("pending") @db.VarChar(50)
+  analysis_result Json?
+  financial_score Int?
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([company_id], map: "idx_financial_analysis_company")
+  @@index([user_id], map: "idx_financial_analysis_user")
+}
+
+model financial_status_audit {
+  id                  Int       @id @default(autoincrement())
+  financial_record_id Int?
+  old_status          String?   @db.VarChar(50)
+  new_status          String?   @db.VarChar(50)
+  changed_by          Int?
+  reason              String?
+  created_at          DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model halilab_ideas {
+  id                Int       @id @default(autoincrement())
+  user_id           Int?
+  title             String    @db.VarChar(255)
+  description       String?
+  category          String?   @db.VarChar(100)
+  status            String?   @default("pending") @db.VarChar(50)
+  votes             Int?      @default(0)
+  priority          Int?      @default(0)
+  created_at        DateTime? @default(now()) @db.Timestamp(6)
+  updated_at        DateTime? @default(now()) @db.Timestamp(6)
+  type              String?   @db.VarChar(50)
+  related_prototype String?   @db.VarChar(255)
+  metadata          Json?
+}
+
+model halilab_risk_analysis_runs {
+  id           Int       @id @default(autoincrement())
+  user_id      Int?
+  email        String?   @db.VarChar(255)
+  file_name    String?
+  company_name String?
+  report_date  String?
+  risk_score   Decimal?  @db.Decimal
+  payload      Json
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  users        User?     @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@index([created_at], map: "idx_halilab_risk_runs_created_at")
+  @@index([email], map: "idx_halilab_risk_runs_email")
+}
+
+model halitrade_contracts {
+  id                Int            @id @default(autoincrement())
+  user_id           Int?
+  company_id        Int?
+  trade_partner_id  Int?
+  contract_number   String?        @unique @db.VarChar(100)
+  contract_date     DateTime?      @db.Date
+  contract_value    Decimal?       @db.Decimal
+  currency          String?        @default("USD") @db.VarChar(10)
+  payment_terms     String?
+  delivery_terms    String?
+  status            String?        @default("draft") @db.VarChar(50)
+  goods_description String?
+  quantity          Decimal?       @db.Decimal
+  unit_price        Decimal?       @db.Decimal
+  incoterms         String?        @db.VarChar(50)
+  created_at        DateTime?      @default(now()) @db.Timestamp(6)
+  updated_at        DateTime?      @default(now()) @db.Timestamp(6)
+  buyer_name        String?        @db.VarChar(255)
+  seller_name       String?        @db.VarChar(255)
+  delivery_date     DateTime?      @db.Date
+  terms             String?
+  company           company?       @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  trade_partner     trade_partner? @relation(fields: [trade_partner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users             User?          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([company_id], map: "idx_halitrade_contracts_company_id")
+  @@index([user_id], map: "idx_halitrade_contracts_user_id")
+}
+
+model halitrade_letters_of_credit {
+  id                   Int            @id @default(autoincrement())
+  user_id              Int?
+  company_id           Int?
+  trade_partner_id     Int?
+  lc_number            String?        @unique @db.VarChar(100)
+  issue_date           DateTime?      @db.Date
+  expiry_date          DateTime?      @db.Date
+  amount               Decimal?       @db.Decimal
+  currency             String?        @default("USD") @db.VarChar(10)
+  issuing_bank         String?        @db.VarChar(255)
+  advising_bank        String?        @db.VarChar(255)
+  beneficiary          String?        @db.VarChar(255)
+  applicant            String?        @db.VarChar(255)
+  status               String?        @default("pending") @db.VarChar(50)
+  terms_and_conditions String?
+  created_at           DateTime?      @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?      @default(now()) @db.Timestamp(6)
+  contract_id          Int?
+  terms                String?
+  company              company?       @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  trade_partner        trade_partner? @relation(fields: [trade_partner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                User?          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([company_id], map: "idx_halitrade_lc_company_id")
+  @@index([user_id], map: "idx_halitrade_lc_user_id")
+}
+
+model halitrade_shipments {
+  id                    Int            @id @default(autoincrement())
+  user_id               Int?
+  company_id            Int?
+  trade_partner_id      Int?
+  shipment_number       String?        @unique @db.VarChar(100)
+  shipment_date         DateTime?      @db.Date
+  expected_arrival_date DateTime?      @db.Date
+  actual_arrival_date   DateTime?      @db.Date
+  origin_port           String?        @db.VarChar(255)
+  destination_port      String?        @db.VarChar(255)
+  incoterms             String?        @db.VarChar(50)
+  total_value           Decimal?       @db.Decimal
+  currency              String?        @default("USD") @db.VarChar(10)
+  status                String?        @default("pending") @db.VarChar(50)
+  goods_description     String?
+  container_numbers     String[]
+  bill_of_lading_number String?        @db.VarChar(100)
+  created_at            DateTime?      @default(now()) @db.Timestamp(6)
+  updated_at            DateTime?      @default(now()) @db.Timestamp(6)
+  contract_id           Int?
+  lc_id                 Int?
+  shipping_line         String?        @db.VarChar(255)
+  vessel_name           String?        @db.VarChar(255)
+  port_of_loading       String?        @db.VarChar(255)
+  port_of_discharge     String?        @db.VarChar(255)
+  etd                   DateTime?      @db.Date
+  eta                   DateTime?      @db.Date
+  actual_departure_date DateTime?      @db.Date
+  tracking_info         String?
+  company               company?       @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  trade_partner         trade_partner? @relation(fields: [trade_partner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                 User?          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([company_id], map: "idx_halitrade_shipments_company_id")
+  @@index([user_id], map: "idx_halitrade_shipments_user_id")
+}
+
+model invoice_allocations {
+  id                           Int                  @id @default(autoincrement())
+  invoice_id                   Int?
+  investor_wallet_id           Int?
+  amount                       Decimal              @db.Decimal(15, 2)
+  status                       String?              @default("ACTIVE") @db.VarChar(50)
+  created_at                   DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at                   DateTime?            @default(now()) @db.Timestamp(6)
+  opportunity_id               Int?
+  currency                     String?              @default("USD") @db.VarChar(3)
+  idempotency_key              String?              @db.VarChar(255)
+  tenant_id                    Int?
+  requested_advance_percentage Decimal?             @db.Decimal
+  requested_tenor_days         Int?
+  approved_at                  DateTime?            @db.Timestamptz(6)
+  approved_by                  Int?
+  rejected_at                  DateTime?            @db.Timestamptz(6)
+  rejected_reason              String?
+  executed_at                  DateTime?            @db.Timestamptz(6)
+  transaction_ids              Json?
+  investor_id                  Int?
+  wallets                      wallets?             @relation(fields: [investor_wallet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoices                     invoices?            @relation(fields: [invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  opportunities                opportunities?       @relation(fields: [opportunity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  white_label_tenants          white_label_tenants? @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([investor_wallet_id, idempotency_key], map: "idx_allocations_wallet_idempotency")
+  @@index([currency], map: "idx_allocations_currency")
+  @@index([investor_wallet_id], map: "idx_allocations_investor")
+  @@index([invoice_id], map: "idx_allocations_invoice")
+  @@index([tenant_id], map: "idx_allocations_tenant_id")
+}
+
+model invoice_analysis {
+  id                Int            @id @default(autoincrement())
+  user_id           Int?
+  company_id        Int?
+  trade_partner_id  Int?
+  filename          String?
+  file_url          String?
+  extracted_json    Json?
+  risk_json         Json?
+  claude_json       Json?
+  form_json         Json?
+  validation_status String?        @default("pending") @db.VarChar(50)
+  created_at        DateTime?      @default(now()) @db.Timestamp(6)
+  tenant_id         Int?
+  company           company?       @relation(fields: [company_id], references: [id], onUpdate: NoAction)
+  trade_partner     trade_partner? @relation(fields: [trade_partner_id], references: [id], onUpdate: NoAction)
+  users             User?          @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model invoice_documents {
+  id               Int       @id @default(autoincrement())
+  filename         String    @db.VarChar(255)
+  file_data        Bytes
+  file_size        Int
+  mime_type        String?   @default("application/pdf") @db.VarChar(100)
+  company_id       Int?
+  trade_partner_id Int?
+  user_id          Int?
+  analysis_data    Json?
+  extracted_data   Json?
+  risk_analysis    Json?
+  claude_details   Json?
+  status           String?   @default("uploaded") @db.VarChar(50)
+  uploaded_at      DateTime? @default(now()) @db.Timestamp(6)
+  analyzed_at      DateTime? @db.Timestamp(6)
+  created_at       DateTime? @default(now()) @db.Timestamp(6)
+  updated_at       DateTime? @default(now()) @db.Timestamp(6)
+  lead_id          Int?
+  conversation_id  String?   @db.VarChar(255)
+  tenant_id        Int?
+  metadata         Json?
+  leads            leads?    @relation(fields: [lead_id], references: [id], onUpdate: NoAction)
+
+  @@index([company_id], map: "idx_invoice_documents_company")
+  @@index([created_at], map: "idx_invoice_documents_created")
+  @@index([status], map: "idx_invoice_documents_status")
+  @@index([tenant_id], map: "idx_invoice_documents_tenant_id")
+  @@index([user_id], map: "idx_invoice_documents_user")
+}
+
+model invoice_financing_documents {
+  id             Int       @id @default(autoincrement())
+  session_id     Int?
+  document_type  String?   @db.VarChar(100)
+  file_name      String?   @db.VarChar(255)
+  file_path      String?
+  status         String?   @default("pending") @db.VarChar(50)
+  extracted_data Json?
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model invoice_financing_reviews {
+  id                  Int                  @id @default(autoincrement())
+  user_id             Int?
+  company_id          Int?
+  trade_partner_id    Int?
+  invoice_number      String?              @db.VarChar(120)
+  analysis_json       Json
+  summary_json        Json?
+  documents_json      Json?
+  metadata_json       Json?
+  raw_response        String?
+  decision            String?              @db.VarChar(50)
+  confidence          String?              @db.VarChar(50)
+  created_at          DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?            @default(now()) @db.Timestamp(6)
+  tenant_id           Int?                 @default(1)
+  company             company?             @relation(fields: [company_id], references: [id], onUpdate: NoAction)
+  white_label_tenants white_label_tenants? @relation(fields: [tenant_id], references: [id], onUpdate: NoAction)
+  trade_partner       trade_partner?       @relation(fields: [trade_partner_id], references: [id], onUpdate: NoAction)
+  users               User?                @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@index([invoice_number], map: "idx_ifr_invoice_number")
+  @@index([tenant_id], map: "idx_ifr_tenant_id")
+  @@index([user_id], map: "idx_ifr_user_id")
+}
+
+model invoice_financing_sessions {
+  id              Int       @id @default(autoincrement())
+  user_id         Int?
+  company_id      Int?
+  session_code    String?   @db.VarChar(100)
+  status          String?   @default("draft") @db.VarChar(50)
+  total_amount    Decimal?  @db.Decimal(15, 2)
+  approved_amount Decimal?  @db.Decimal(15, 2)
+  metadata        Json?
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([user_id], map: "idx_invoice_financing_sessions_user")
+}
+
+model invoice_instruction_records {
+  id                   Int       @id @default(autoincrement())
+  record_code          String?   @unique @db.VarChar(50)
+  trade_partner_id     Int
+  tenant_id            Int?
+  relationship_map_id  Int?
+  company_id           Int?
+  created_by           Int?
+  submission_channel   String?
+  required_documents   String?
+  processing_time      String?   @db.VarChar(100)
+  special_requirements String?
+  instructions_data    Json?     @default("{}")
+  analysis_data        Json?     @default("{}")
+  decision             String?   @default("Pending") @db.VarChar(50)
+  decision_comments    String?
+  signature            Json?
+  created_at           DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([tenant_id], map: "idx_invoice_instruction_records_tenant_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model invoices {
+  id                                                                   Int                   @id @default(autoincrement())
+  user_id                                                              Int?
+  company_id                                                           Int?
+  trade_partner_id                                                     Int?
+  invoice_number                                                       String?               @unique @db.VarChar(100)
+  invoice_date                                                         DateTime?             @db.Date
+  due_date                                                             DateTime?             @db.Date
+  amount                                                               Decimal?              @db.Decimal
+  currency                                                             String?               @default("USD") @db.VarChar(10)
+  status                                                               String?               @default("pending") @db.VarChar(50)
+  payment_terms                                                        String?
+  description                                                          String?
+  created_at                                                           DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at                                                           DateTime?             @default(now()) @db.Timestamp(6)
+  product_source                                                       String?               @default("haliflow") @db.VarChar(50)
+  buyer_confirmation_status                                            String?               @db.VarChar(50)
+  buyer_confirmation_at                                                DateTime?             @db.Timestamp(6)
+  amount_funded                                                        Decimal?              @default(0) @db.Decimal(15, 2)
+  tenant_id                                                            Int?
+  platform_tenant_id                                                   Int?
+  agent_tenant_id                                                      Int?
+  buyer_confirmer_role                                                 String?               @db.VarChar(100)
+  buyer_confirmer_user_id                                              Int?
+  buyer_dispute_details                                                String?
+  buyer_dispute_reason                                                 String?
+  buyer_magic_links                                                    buyer_magic_links[]
+  invoice_allocations                                                  invoice_allocations[]
+  white_label_tenants_invoices_agent_tenant_idTowhite_label_tenants    white_label_tenants?  @relation("invoices_agent_tenant_idTowhite_label_tenants", fields: [agent_tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                                                              company?              @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  white_label_tenants_invoices_platform_tenant_idTowhite_label_tenants white_label_tenants?  @relation("invoices_platform_tenant_idTowhite_label_tenants", fields: [platform_tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  trade_partner                                                        trade_partner?        @relation(fields: [trade_partner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                                                                User?                 @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  noa_documents                                                        noa_documents[]
+
+  @@index([agent_tenant_id], map: "idx_invoices_agent_tenant_id")
+  @@index([platform_tenant_id], map: "idx_invoices_platform_tenant_id")
+  @@index([product_source], map: "idx_invoices_product_source")
+  @@index([tenant_id], map: "idx_invoices_tenant_id")
+  @@index([user_id], map: "idx_invoices_user_id")
+}
+
+model kyc {
+  id               Int           @id @default(autoincrement())
+  trade_partner_id Int
+  status           String?
+  risk_score       Decimal?      @db.Decimal
+  notes            String?
+  updated_at       DateTime?     @default(now()) @db.Timestamp(6)
+  tenant_id        Int?
+  trade_partner    trade_partner @relation(fields: [trade_partner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tenant_id], map: "idx_kyc_tenant_id")
+}
+
+model kyc_documents {
+  id                Int                @id @default(autoincrement())
+  verification_id   String?            @db.Uuid
+  original_filename String?            @db.VarChar(500)
+  stored_filename   String?            @db.VarChar(500)
+  file_path         String?            @db.VarChar(1000)
+  file_type         String?            @db.VarChar(100)
+  file_size         Int?
+  document_type     String?            @db.VarChar(255)
+  extracted_data    Json?              @default("{}")
+  uploaded_at       DateTime?          @default(now()) @db.Timestamp(6)
+  tenant_id         Int?
+  file_content      Bytes?
+  kyc_verifications kyc_verifications? @relation(fields: [verification_id], references: [verification_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([verification_id], map: "idx_kyc_documents_verification_id")
+}
+
+model kyc_status_audit {
+  id              Int       @id @default(autoincrement())
+  verification_id String    @db.VarChar(100)
+  from_status     Int?
+  to_status       Int
+  changed_by      Int?
+  changed_by_name String?   @db.VarChar(255)
+  reason          String?
+  tenant_id       Int
+  changed_at      DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([tenant_id], map: "idx_kyc_status_audit_tenant")
+  @@index([verification_id], map: "idx_kyc_status_audit_verification")
+}
+
+model kyc_verifications {
+  id                   Int             @id @default(autoincrement())
+  verification_id      String          @unique @db.Uuid
+  reference_number     String?         @unique @db.VarChar(20)
+  company_name         String?         @db.VarChar(255)
+  jurisdiction         String?         @db.VarChar(255)
+  risk_score           Int?            @default(0)
+  risk_level           String?         @db.VarChar(50)
+  decision             String?         @db.VarChar(100)
+  executive_summary    String?
+  documents_identified Json?           @default("[]")
+  categories           Json?           @default("[]")
+  key_findings         Json?           @default("[]")
+  recommendations      Json?           @default("[]")
+  missing_documents    Json?           @default("[]")
+  extracted_data       Json?           @default("{}")
+  status               String?         @default("pending") @db.VarChar(50)
+  created_by           Int?
+  created_at           DateTime?       @default(now()) @db.Timestamp(6)
+  completed_at         DateTime?       @db.Timestamp(6)
+  updated_at           DateTime?       @default(now()) @db.Timestamp(6)
+  kyc_status           Int?            @default(-2)
+  signed_at            DateTime?       @db.Timestamp(6)
+  signed_by            Int?
+  signed_by_name       String?         @db.VarChar(255)
+  signed_by_email      String?         @db.VarChar(255)
+  signed_by_role       String?         @db.VarChar(100)
+  decision_comment     String?
+  map_id               String?         @db.VarChar(100)
+  tenant_id            Int?
+  trade_partner_id     Int?
+  trade_partner_name   String?         @db.VarChar(255)
+  kyc_documents        kyc_documents[]
+  users                User?           @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([created_at(sort: Desc)], map: "idx_kyc_verifications_created_at")
+  @@index([created_by], map: "idx_kyc_verifications_created_by")
+  @@index([status], map: "idx_kyc_verifications_status")
+  @@index([verification_id], map: "idx_kyc_verifications_verification_id")
+}
+
+model lead_activities {
+  id            Int       @id @default(autoincrement())
+  lead_id       Int
+  activity_type String    @db.VarChar(50)
+  description   String?
+  metadata      Json?     @default("{}")
+  performed_by  Int?
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([created_at(sort: Desc)], map: "idx_lead_activities_created_at")
+  @@index([lead_id], map: "idx_lead_activities_lead")
+  @@index([lead_id], map: "idx_lead_activities_lead_id")
+}
+
+model lead_conversations {
+  id                   Int       @id @default(autoincrement())
+  conversation_id      String    @unique @db.VarChar(100)
+  lead_id              Int?
+  tenant_id            Int?
+  status               String?   @default("active") @db.VarChar(50)
+  qualification_status String?   @db.VarChar(50)
+  messages             Json?     @default("[]")
+  metadata             Json?     @default("{}")
+  started_at           DateTime? @default(now()) @db.Timestamp(6)
+  ended_at             DateTime? @db.Timestamp(6)
+  created_at           DateTime? @default(now()) @db.Timestamp(6)
+  updated_at           DateTime? @default(now()) @db.Timestamp(6)
+  leads                leads?    @relation(fields: [lead_id], references: [id], onUpdate: NoAction)
+
+  @@index([conversation_id], map: "idx_lead_conversations_conversation_id")
+  @@index([created_at(sort: Desc)], map: "idx_lead_conversations_created_at")
+  @@index([lead_id], map: "idx_lead_conversations_lead")
+  @@index([lead_id], map: "idx_lead_conversations_lead_id")
+  @@index([status], map: "idx_lead_conversations_status")
+  @@index([tenant_id], map: "idx_lead_conversations_tenant_id")
+}
+
+model lead_invites {
+  id         Int       @id @default(autoincrement())
+  lead_id    Int?
+  user_id    Int?
+  tenant_id  Int?
+  email      String?   @db.VarChar(255)
+  token_hash String    @unique
+  status     String?   @default("active") @db.VarChar(50)
+  expires_at DateTime  @db.Timestamp(6)
+  used_at    DateTime? @db.Timestamp(6)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  created_by Int?
+  leads      leads?    @relation(fields: [lead_id], references: [id], onUpdate: NoAction)
+  users      User?     @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@index([lead_id], map: "idx_lead_invites_lead_id")
+  @@index([status], map: "idx_lead_invites_status")
+  @@index([token_hash], map: "idx_lead_invites_token_hash")
+  @@index([user_id], map: "idx_lead_invites_user_id")
+}
+
+model lead_score_history {
+  id              Int       @id @default(autoincrement())
+  lead_id         Int?
+  score           Int?
+  score_breakdown Json?
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  leads           leads?    @relation(fields: [lead_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model leads {
+  id                     Int                  @id @default(autoincrement())
+  tenant_id              Int?
+  first_name             String               @db.VarChar(255)
+  last_name              String               @db.VarChar(255)
+  email                  String               @db.VarChar(255)
+  phone                  String?              @db.VarChar(50)
+  company                String?              @db.VarChar(255)
+  job_title              String?              @db.VarChar(255)
+  status                 String?              @default("new") @db.VarChar(50)
+  source                 String?              @default("website") @db.VarChar(50)
+  priority               String?              @default("medium") @db.VarChar(50)
+  score                  Int?                 @default(0)
+  score_breakdown        Json?                @default("{}")
+  financial_data         Json?                @default("{}")
+  interactions           Json?                @default("[]")
+  ai_analysis            Json?                @default("{}")
+  assigned_to            Int?
+  notes                  String?
+  tags                   Json?                @default("[]")
+  created_at             DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at             DateTime?            @default(now()) @db.Timestamp(6)
+  last_contacted_at      DateTime?            @db.Timestamp(6)
+  converted_at           DateTime?            @db.Timestamp(6)
+  lead_number            String?              @db.VarChar(50)
+  lead_classification    String?              @db.VarChar(50)
+  monthly_invoice_volume Decimal?             @db.Decimal(15, 2)
+  invoice_documents      invoice_documents[]
+  lead_conversations     lead_conversations[]
+  lead_invites           lead_invites[]
+  lead_score_history     lead_score_history[]
+
+  @@index([assigned_to], map: "idx_leads_assigned")
+  @@index([created_at(sort: Desc)], map: "idx_leads_created_at")
+  @@index([email], map: "idx_leads_email")
+  @@index([score(sort: Desc)], map: "idx_leads_score")
+  @@index([status], map: "idx_leads_status")
+  @@index([tenant_id], map: "idx_leads_tenant")
+  @@index([tenant_id], map: "idx_leads_tenant_id")
+}
+
+model ledger_transactions {
+  id                                                    Int       @id @default(autoincrement())
+  debit_wallet_id                                       Int?
+  credit_wallet_id                                      Int?
+  amount                                                Decimal   @db.Decimal(15, 2)
+  currency                                              String?   @default("USD") @db.VarChar(10)
+  type                                                  String    @db.VarChar(50)
+  reference_type                                        String?   @db.VarChar(50)
+  reference_id                                          String?   @db.VarChar(100)
+  description                                           String?
+  created_at                                            DateTime? @default(now()) @db.Timestamp(6)
+  wallet_id                                             Int?
+  balance_after                                         Decimal?  @db.Decimal(15, 2)
+  tenant_id                                             Int?
+  wallets_ledger_transactions_credit_wallet_idTowallets wallets?  @relation("ledger_transactions_credit_wallet_idTowallets", fields: [credit_wallet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  wallets_ledger_transactions_debit_wallet_idTowallets  wallets?  @relation("ledger_transactions_debit_wallet_idTowallets", fields: [debit_wallet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([credit_wallet_id], map: "idx_ledger_credit")
+  @@index([debit_wallet_id], map: "idx_ledger_debit")
+  @@index([reference_type, reference_id], map: "idx_ledger_ref")
+}
+
+model module_permissions {
+  id                 Int       @id @default(autoincrement())
+  role_id            Int?
+  module_name        String?   @db.VarChar(100)
+  can_view           Boolean?  @default(false)
+  can_create         Boolean?  @default(false)
+  can_edit           Boolean?  @default(false)
+  can_delete         Boolean?  @default(false)
+  custom_permissions Json?
+  created_at         DateTime? @default(now()) @db.Timestamp(6)
+  updated_at         DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model noa_audit_logs {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  noa_id           String        @db.Uuid
+  action           String        @db.VarChar(100)
+  status_before    String?       @db.VarChar(50)
+  status_after     String?       @db.VarChar(50)
+  user_id          Int?
+  user_email       String?       @db.VarChar(255)
+  timestamp        DateTime?     @default(now()) @db.Timestamptz(6)
+  ip_address       String?       @db.VarChar(45)
+  user_agent       String?
+  noa_version_hash String?       @db.VarChar(255)
+  noa_documents    noa_documents @relation(fields: [noa_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([noa_id], map: "idx_noa_audit_noa_id")
+}
+
+model noa_documents {
+  id                                         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_id                                 Int
+  supplier_id                                Int?
+  buyer_id                                   Int?
+  content                                    Json?
+  status                                     String?             @default("DRAFT") @db.VarChar(50)
+  supplier_signature                         Json?
+  buyer_signature                            Json?
+  created_at                                 DateTime?           @default(now()) @db.Timestamptz(6)
+  updated_at                                 DateTime?           @default(now()) @db.Timestamptz(6)
+  validation_queue_id                        Int?
+  pdf_data                                   String?
+  pdf_filename                               String?             @db.VarChar(255)
+  pdf_generated_at                           DateTime?           @db.Timestamptz(6)
+  pdf_hash                                   String?             @db.VarChar(255)
+  pdf_size_bytes                             Int?
+  pdf_version                                Int?
+  legal_metadata                             Json?
+  invoice_financing_review_id                Int?
+  buyer_magic_links                          buyer_magic_links[]
+  noa_audit_logs                             noa_audit_logs[]
+  company_noa_documents_buyer_idTocompany    company?            @relation("noa_documents_buyer_idTocompany", fields: [buyer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoices                                   invoices            @relation(fields: [invoice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company_noa_documents_supplier_idTocompany company?            @relation("noa_documents_supplier_idTocompany", fields: [supplier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([invoice_id], map: "idx_noa_invoice_id")
+}
+
+model notifications {
+  id         Int       @id @default(autoincrement())
+  user_id    Int?
+  title      String?   @db.VarChar(255)
+  message    String?
+  type       String?   @db.VarChar(50)
+  is_read    Boolean?  @default(false)
+  read_at    DateTime? @db.Timestamp(6)
+  action_url String?
+  metadata   Json?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([is_read], map: "idx_notifications_read")
+  @@index([user_id], map: "idx_notifications_user")
+}
+
+model object_definitions {
+  id                Int       @id @default(autoincrement())
+  name              String?   @db.VarChar(100)
+  display_name      String?   @db.VarChar(255)
+  description       String?
+  schema_definition Json?
+  is_system         Boolean?  @default(false)
+  created_at        DateTime? @default(now()) @db.Timestamp(6)
+  updated_at        DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model object_permissions {
+  id              Int       @id @default(autoincrement())
+  object_id       Int?
+  user_id         Int?
+  role_id         Int?
+  permission_type String?   @db.VarChar(50)
+  granted_by      Int?
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model onboarding_studio {
+  id          Int       @id @default(autoincrement())
+  tenant_id   Int?
+  name        String?   @db.VarChar(255)
+  description String?
+  steps       Json?
+  is_active   Boolean?  @default(true)
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model opportunities {
+  id                                                                        Int                   @id @default(autoincrement())
+  supplier_name                                                             String
+  supplier_country                                                          String?
+  buyer_name                                                                String?
+  buyer_country                                                             String?
+  product_type                                                              String?
+  facility_amount                                                           Decimal?              @db.Decimal
+  invoice_amount                                                            Decimal?              @db.Decimal
+  currency                                                                  String?
+  commodity                                                                 String?
+  expected_financing_date                                                   DateTime?             @db.Timestamp(6)
+  notes                                                                     String?
+  agent_id                                                                  String?
+  agent_email                                                               String?
+  agent_name                                                                String?
+  status                                                                    String?               @default("pending")
+  analysis                                                                  Json?                 @default("{}")
+  metadata                                                                  Json?                 @default("{}")
+  status_history                                                            Json?                 @default("[]")
+  file_name                                                                 String?
+  pdf_base64                                                                String?
+  created_at                                                                DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at                                                                DateTime?             @default(now()) @db.Timestamp(6)
+  tenant_id                                                                 Int
+  advance_rate                                                              Decimal?              @db.Decimal(5, 2)
+  disbursement_amount                                                       Decimal?              @db.Decimal(15, 2)
+  goods_and_services                                                        String?
+  first_invoice_amount                                                      Decimal?              @db.Decimal(15, 2)
+  risk_score                                                                Decimal?              @db.Decimal
+  risk_level                                                                String?
+  risk_recommendation                                                       String?
+  risk_action_type                                                          String?
+  submitter_category                                                        String?               @default("customer")
+  platform_tenant_id                                                        Int?
+  agent_tenant_id                                                           Int?
+  amount_funded                                                             Decimal?              @db.Decimal(15, 2)
+  amount                                                                    Decimal?              @db.Decimal(15, 2)
+  company_id                                                                Int?
+  description                                                               String?
+  name                                                                      String?               @db.VarChar(255)
+  user_id                                                                   Int?
+  customer_email                                                            String?               @db.VarChar(255)
+  customer_id                                                               Int?
+  invoice_allocations                                                       invoice_allocations[]
+  white_label_tenants_opportunities_agent_tenant_idTowhite_label_tenants    white_label_tenants?  @relation("opportunities_agent_tenant_idTowhite_label_tenants", fields: [agent_tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  white_label_tenants_opportunities_platform_tenant_idTowhite_label_tenants white_label_tenants?  @relation("opportunities_platform_tenant_idTowhite_label_tenants", fields: [platform_tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  white_label_tenants_opportunities_tenant_idTowhite_label_tenants          white_label_tenants   @relation("opportunities_tenant_idTowhite_label_tenants", fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  validation_queue                                                          validation_queue[]
+
+  @@index([agent_tenant_id], map: "idx_opportunities_agent_tenant_id")
+  @@index([platform_tenant_id], map: "idx_opportunities_platform_tenant_id")
+  @@index([tenant_id], map: "idx_opportunities_tenant")
+  @@index([tenant_id], map: "idx_opportunities_tenant_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model past_trade_documents {
+  id                       Int                      @id @default(autoincrement())
+  verification_id          Int
+  tenant_id                Int
+  file_name                String                   @db.VarChar(255)
+  file_type                String?                  @db.VarChar(50)
+  file_size                Int?
+  document_data            Bytes
+  set_name                 String?                  @db.VarChar(50)
+  document_type            String?                  @db.VarChar(100)
+  detected_year            Int?
+  confidence_score         Decimal?                 @db.Decimal(5, 2)
+  analysis_data            Json?
+  extracted_data           Json?
+  uploaded_at              DateTime?                @default(now()) @db.Timestamp(6)
+  processed_at             DateTime?                @db.Timestamp(6)
+  past_trade_verifications past_trade_verifications @relation(fields: [verification_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([set_name], map: "idx_past_trade_documents_set")
+  @@index([tenant_id], map: "idx_past_trade_documents_tenant")
+  @@index([document_type], map: "idx_past_trade_documents_type")
+  @@index([verification_id], map: "idx_past_trade_documents_verification")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model past_trade_status_audit {
+  id                       Int                      @id @default(autoincrement())
+  verification_id          Int
+  tenant_id                Int
+  old_status               Int?
+  new_status               Int
+  old_status_label         String?                  @db.VarChar(50)
+  new_status_label         String                   @db.VarChar(50)
+  changed_by               Int?
+  changed_by_name          String?                  @db.VarChar(255)
+  changed_by_email         String?                  @db.VarChar(255)
+  change_reason            String?
+  notes                    String?
+  metadata                 Json?
+  changed_at               DateTime?                @default(now()) @db.Timestamp(6)
+  users                    User?                    @relation(fields: [changed_by], references: [id], onUpdate: NoAction)
+  past_trade_verifications past_trade_verifications @relation(fields: [verification_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([changed_at(sort: Desc)], map: "idx_past_trade_audit_changed_at")
+  @@index([tenant_id], map: "idx_past_trade_audit_tenant")
+  @@index([verification_id], map: "idx_past_trade_audit_verification")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model past_trade_verifications {
+  id                                                 Int                       @id @default(autoincrement())
+  reference_number                                   String                    @unique @db.VarChar(50)
+  tenant_id                                          Int
+  map_id                                             Int?
+  trade_partner_id                                   Int?
+  map_reference                                      String?                   @db.VarChar(100)
+  submitted_by                                       Int?
+  submitted_at                                       DateTime?                 @default(now()) @db.Timestamp(6)
+  company_name                                       String?                   @db.VarChar(255)
+  upload_mode                                        String?                   @default("batch") @db.VarChar(20)
+  analysis_type                                      String?                   @db.VarChar(50)
+  status                                             Int?                      @default(-2)
+  status_label                                       String?                   @default("Pending Analysis") @db.VarChar(50)
+  analysis_results                                   Json?
+  portfolio_summary                                  Json?
+  risk_breakdown                                     Json?
+  discrepancies                                      Json?
+  missing_documents                                  Json?
+  decision                                           String?                   @db.VarChar(20)
+  decision_by                                        Int?
+  decision_at                                        DateTime?                 @db.Timestamp(6)
+  decision_notes                                     String?
+  signature_data                                     String?
+  signature_name                                     String?                   @db.VarChar(255)
+  signature_title                                    String?                   @db.VarChar(255)
+  total_documents                                    Int?                      @default(0)
+  total_sets                                         Int?                      @default(0)
+  processing_time_ms                                 Int?
+  created_at                                         DateTime?                 @default(now()) @db.Timestamp(6)
+  updated_at                                         DateTime?                 @default(now()) @db.Timestamp(6)
+  past_trade_documents                               past_trade_documents[]
+  past_trade_status_audit                            past_trade_status_audit[]
+  users_past_trade_verifications_decision_byTousers  User?                     @relation("past_trade_verifications_decision_byTousers", fields: [decision_by], references: [id], onUpdate: NoAction)
+  users_past_trade_verifications_submitted_byTousers User?                     @relation("past_trade_verifications_submitted_byTousers", fields: [submitted_by], references: [id], onUpdate: NoAction)
+
+  @@index([created_at(sort: Desc)], map: "idx_past_trade_verifications_created_at")
+  @@index([map_id], map: "idx_past_trade_verifications_map")
+  @@index([reference_number], map: "idx_past_trade_verifications_reference")
+  @@index([status], map: "idx_past_trade_verifications_status")
+  @@index([submitted_by], map: "idx_past_trade_verifications_submitted_by")
+  @@index([tenant_id], map: "idx_past_trade_verifications_tenant")
+}
+
+model permission_sets {
+  id               Int                @id @default(autoincrement())
+  name             String             @db.VarChar
+  object_type      String             @db.VarChar
+  can_view         Boolean?           @default(false)
+  can_edit         Boolean?           @default(false)
+  can_delete       Boolean?           @default(false)
+  can_approve      Boolean?           @default(false)
+  can_share        Boolean?           @default(false)
+  can_create       Boolean?           @default(false)
+  description      String?
+  created_at       DateTime?          @default(now()) @db.Timestamp(6)
+  record_shares    record_shares[]
+  user_permissions user_permissions[]
+
+  @@unique([name, object_type], map: "idx_permission_sets_name_object")
+}
+
+model pgmigrations {
+  id     Int       @id @default(autoincrement())
+  name   String    @unique
+  run_on DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model pricing_analyses {
+  id                  Int       @id @default(autoincrement())
+  record_code         String?   @unique
+  trade_partner_id    Int?
+  relationship_map_id String?
+  tenant_id           Int?
+  risk_score          Decimal?  @db.Decimal
+  recommended_rate    Decimal?  @db.Decimal
+  service_fees        Json?
+  margins             Json?
+  payment_terms       String?
+  risk_level          String?
+  pricing_tiers       Json?
+  analysis_result     Json?
+  pricing_status      String?
+  decision            String?
+  decision_comments   String?
+  signature           Json?
+  created_by          String?
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  updated_by          String?
+  updated_at          DateTime? @db.Timestamptz(6)
+  signed_by           String?
+  signed_at           DateTime? @db.Timestamptz(6)
+
+  @@index([relationship_map_id], map: "idx_pricing_analyses_map")
+  @@index([tenant_id], map: "idx_pricing_analyses_tenant_id")
+  @@index([trade_partner_id], map: "idx_pricing_analyses_trade_partner")
+}
+
+model record_shares {
+  id                  Int                 @id @default(autoincrement())
+  record_type         String              @db.VarChar
+  record_id           Int
+  tenant_id           Int
+  permission_set_id   Int?
+  shared_by           Int?
+  shared_reason       String?             @db.VarChar
+  shared_at           DateTime?           @default(now()) @db.Timestamp(6)
+  expires_at          DateTime?           @db.Timestamp(6)
+  permission_sets     permission_sets?    @relation(fields: [permission_set_id], references: [id], onUpdate: NoAction)
+  users               User?               @relation(fields: [shared_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  white_label_tenants white_label_tenants @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([record_type, record_id, tenant_id])
+  @@index([expires_at], map: "idx_record_shares_expires_at")
+  @@index([record_type, record_id], map: "idx_record_shares_record")
+  @@index([tenant_id], map: "idx_record_shares_tenant_id")
+}
+
+model referral_submissions {
+  id                            Int            @id @default(autoincrement())
+  referral_agent_id             Int?
+  referral_agent_email          String?        @db.VarChar(255)
+  referral_agent_name           String?
+  supplier_name                 String         @db.VarChar(255)
+  supplier_country              String?        @db.VarChar(100)
+  supplier_industry             String?
+  supplier_contact_name         String?        @db.VarChar(255)
+  supplier_contact_email        String?        @db.VarChar(255)
+  supplier_contact_phone        String?        @db.VarChar(50)
+  supplier_registration_no      String?        @db.VarChar(100)
+  supplier_annual_turnover      Decimal?       @db.Decimal
+  trade_partner_name            String?        @db.VarChar(255)
+  trade_partner_country         String?        @db.VarChar(100)
+  trade_partner_type            String?        @db.VarChar(50)
+  trade_partner_contact_name    String?        @db.VarChar(255)
+  trade_partner_contact_email   String?        @db.VarChar(255)
+  trade_partner_contact_phone   String?        @db.VarChar(50)
+  trade_partner_registration_no String?        @db.VarChar(100)
+  financing_amount              Decimal?       @db.Decimal
+  currency                      String?        @default("USD") @db.VarChar(10)
+  notes                         String?
+  status                        String?        @default("pending") @db.VarChar(50)
+  rejection_reason              String?
+  commission_amount             Decimal?       @default(0) @db.Decimal
+  commission_paid               Boolean?       @default(false)
+  commission_paid_date          DateTime?      @db.Timestamp(6)
+  approved_date                 DateTime?      @db.Timestamp(6)
+  created_company_id            Int?
+  created_trade_partner_id      Int?
+  created_at                    DateTime?      @default(now()) @db.Timestamp(6)
+  updated_at                    DateTime?      @default(now()) @db.Timestamp(6)
+  credit_limit_required         Decimal?       @db.Decimal
+  tenor                         Int?           @default(60)
+  company                       company?       @relation(fields: [created_company_id], references: [id], onUpdate: NoAction)
+  trade_partner                 trade_partner? @relation(fields: [created_trade_partner_id], references: [id], onUpdate: NoAction)
+  users                         User?          @relation(fields: [referral_agent_id], references: [id], onUpdate: NoAction)
+
+  @@index([referral_agent_id], map: "idx_ref_agent_id")
+  @@index([status], map: "idx_ref_status")
+}
+
+model referrals {
+  id             Int       @id @default(autoincrement())
+  referrer_id    Int?
+  referred_email String?   @db.VarChar(255)
+  referral_code  String?   @db.VarChar(100)
+  status         String?   @default("pending") @db.VarChar(50)
+  reward_amount  Decimal?  @db.Decimal(10, 2)
+  reward_paid_at DateTime? @db.Timestamp(6)
+  converted_at   DateTime? @db.Timestamp(6)
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model relationship_map {
+  id                         Int                          @id @default(autoincrement())
+  trade_partner_id           Int
+  overview_data              Json?                        @default("{}")
+  financial_risk_data        Json?                        @default("{}")
+  legal_risk_data            Json?                        @default("{}")
+  pricing_structure          Json?                        @default("{}")
+  invoice_instructions       Json?                        @default("{}")
+  credit_limit_details       Json?                        @default("{}")
+  status                     String?                      @default("draft") @db.VarChar(50)
+  created_at                 DateTime?                    @default(now()) @db.Timestamp(6)
+  updated_at                 DateTime?                    @default(now()) @db.Timestamp(6)
+  past_trade_data            Json?                        @default("{}")
+  compliance_data            Json?                        @default("{}")
+  arpa_details               Json?                        @default("{}")
+  map_reference              String?                      @db.VarChar(100)
+  tenant_id                  Int?
+  trade_partner              trade_partner                @relation(fields: [trade_partner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  relationship_map_audit_log relationship_map_audit_log[]
+
+  @@index([status], map: "idx_relationship_map_status")
+  @@index([trade_partner_id], map: "idx_relationship_map_trade_partner_id")
+}
+
+model relationship_map_audit_log {
+  id                  Int               @id @default(autoincrement())
+  relationship_map_id Int?
+  trade_partner_id    Int?
+  component           String            @db.VarChar(100)
+  action              String            @db.VarChar(100)
+  action_type         String?           @db.VarChar(50)
+  details             String?
+  field_name          String?           @db.VarChar(200)
+  old_value           String?
+  new_value           String?
+  decision_type       String?           @db.VarChar(50)
+  decision_comment    String?
+  risk_level          String?           @db.VarChar(20)
+  signature_hash      String?           @db.VarChar(100)
+  user_id             Int?
+  user_email          String            @db.VarChar(255)
+  user_name           String?           @db.VarChar(255)
+  user_role           String?           @db.VarChar(100)
+  user_company        String?           @db.VarChar(255)
+  ip_address          String?           @db.VarChar(45)
+  user_agent          String?
+  created_at          DateTime?         @default(now()) @db.Timestamp(6)
+  relationship_map    relationship_map? @relation(fields: [relationship_map_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  trade_partner       trade_partner?    @relation(fields: [trade_partner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users               User?             @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([component], map: "idx_audit_log_component")
+  @@index([created_at(sort: Desc)], map: "idx_audit_log_created_at")
+  @@index([trade_partner_id], map: "idx_audit_log_trade_partner")
+}
+
+model risk_maps {
+  id          Int       @id @default(autoincrement())
+  company_id  Int?
+  name        String?   @db.VarChar(255)
+  description String?
+  risk_data   Json?
+  score       Int?
+  created_by  Int?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([company_id], map: "idx_risk_maps_company")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model role_permissions {
+  id               Int       @id @default(autoincrement())
+  platform         String    @unique @db.VarChar(50)
+  permissions      Json
+  updated_by       Int?
+  created_at       DateTime? @default(now()) @db.Timestamp(6)
+  updated_at       DateTime? @default(now()) @db.Timestamp(6)
+  permission_key   String?   @db.VarChar(100)
+  permission_value Json?
+  role_name        String?   @db.VarChar(100)
+  users            User?     @relation(fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([platform], map: "idx_role_permissions_platform")
+}
+
+model sessions {
+  id         Int       @id @default(autoincrement())
+  user_id    Int?
+  token      String    @unique
+  expires_at DateTime  @db.Timestamp(6)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  tenant_id  Int?
+  users      User?     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tenant_id], map: "idx_sessions_tenant_id")
+  @@index([token], map: "idx_sessions_token")
+  @@index([user_id], map: "idx_sessions_user_id")
+}
+
+model support_chat_attachments {
+  id                    Int                   @id @default(autoincrement())
+  message_id            Int
+  file_name             String
+  file_size             Int
+  mime_type             String                @db.VarChar(255)
+  uploaded_at           DateTime?             @default(now()) @db.Timestamp(6)
+  file_data             Bytes?
+  tenant_id             Int?
+  support_chat_messages support_chat_messages @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([message_id], map: "idx_chat_attachments_message")
+  @@index([message_id], map: "idx_support_chat_attachments_message")
+}
+
+model support_chat_messages {
+  id                          Int                        @id @default(autoincrement())
+  session_id                  String                     @db.VarChar(255)
+  message_text                String
+  sender                      String                     @db.VarChar(50)
+  sender_id                   String?                    @db.VarChar(255)
+  sender_name                 String?                    @db.VarChar(255)
+  created_at                  DateTime?                  @default(now()) @db.Timestamp(6)
+  attachment_url              String?
+  attachment_name             String?
+  attachment_type             String?
+  attachment_size             Int?
+  attachment_data             Bytes?
+  telegram_message_id         BigInt?
+  telegram_user_id            BigInt?
+  is_from_team                Boolean?                   @default(false)
+  parent_message_id           Int?
+  message                     String?
+  tenant_id                   Int?
+  support_chat_attachments    support_chat_attachments[]
+  support_chat_messages       support_chat_messages?     @relation("support_chat_messagesTosupport_chat_messages", fields: [parent_message_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_support_chat_messages support_chat_messages[]    @relation("support_chat_messagesTosupport_chat_messages")
+  support_chat_sessions       support_chat_sessions      @relation(fields: [session_id], references: [session_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([created_at], map: "idx_chat_messages_created")
+  @@index([session_id], map: "idx_chat_messages_session")
+  @@index([created_at], map: "idx_support_chat_messages_created_at")
+  @@index([parent_message_id], map: "idx_support_chat_messages_parent_id")
+  @@index([session_id], map: "idx_support_chat_messages_session_id")
+  @@index([telegram_message_id], map: "idx_support_chat_messages_telegram_id")
+}
+
+model support_chat_sessions {
+  id                    Int                     @id @default(autoincrement())
+  session_id            String                  @unique @db.VarChar(255)
+  user_id               String                  @db.VarChar(255)
+  user_name             String?                 @db.VarChar(255)
+  user_email            String?                 @db.VarChar(255)
+  company_name          String?                 @db.VarChar(255)
+  started_at            DateTime?               @default(now()) @db.Timestamp(6)
+  ended_at              DateTime?               @db.Timestamp(6)
+  active                Boolean?                @default(true)
+  created_at            DateTime?               @default(now()) @db.Timestamp(6)
+  telegram_user_id      BigInt?
+  telegram_linked_at    DateTime?               @db.Timestamp(6)
+  tenant_id             Int?
+  is_active             Boolean?                @default(true)
+  status                String?                 @db.VarChar(50)
+  support_chat_messages support_chat_messages[]
+
+  @@index([active], map: "idx_chat_sessions_active")
+  @@index([user_id], map: "idx_chat_sessions_user_id")
+  @@index([active], map: "idx_support_chat_sessions_active")
+  @@index([session_id], map: "idx_support_chat_sessions_session_id")
+  @@index([telegram_user_id], map: "idx_support_chat_sessions_telegram_user_id")
+  @@index([user_id], map: "idx_support_chat_sessions_user_id")
+}
+
+model tenant_audit_log {
+  id         Int       @id @default(autoincrement())
+  tenant_id  Int?
+  user_id    Int?
+  action     String
+  changes    Json?
+  ip_address String?
+  user_agent String?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+  tenants    Tenant?   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tenant_id, created_at(sort: Desc)], map: "idx_tenant_audit_log_tenant")
+  @@index([user_id, created_at(sort: Desc)], map: "idx_tenant_audit_log_user")
+}
+
+model tenant_usage {
+  id                  Int       @id @default(autoincrement())
+  tenant_id           Int
+  period_start        DateTime  @db.Date
+  period_end          DateTime  @db.Date
+  api_calls           Int?      @default(0)
+  storage_used_gb     Decimal?  @default(0) @db.Decimal(10, 2)
+  documents_processed Int?      @default(0)
+  ai_risk_analyses    Int?      @default(0)
+  estimated_cost_usd  Decimal?  @default(0) @db.Decimal(10, 2)
+  created_at          DateTime? @default(now()) @db.Timestamp(6)
+  updated_at          DateTime? @default(now()) @db.Timestamp(6)
+  tenants             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenant_id, period_start])
+  @@index([tenant_id, period_start(sort: Desc)], map: "idx_tenant_usage_tenant_period")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model termsheet_history {
+  id                  Int      @id @default(autoincrement())
+  validation_queue_id Int
+  modified_by         Int?
+  modified_at         DateTime @default(now()) @db.Timestamp(6)
+  action              String   @db.VarChar(50)
+  previous_termsheet  Json?
+  new_termsheet       Json?
+  changes_summary     String?
+  created_at          DateTime @default(now()) @db.Timestamp(6)
+  user_id             Int?
+
+  @@index([action], map: "idx_termsheet_history_action")
+  @@index([modified_at], map: "idx_termsheet_history_modified_at")
+  @@index([modified_by], map: "idx_termsheet_history_modified_by")
+  @@index([validation_queue_id], map: "idx_termsheet_history_validation_queue_id")
+}
+
+model termsheets {
+  id                Int       @id @default(autoincrement())
+  termsheet_number  String?   @unique @db.VarChar(20)
+  lead_id           Int?
+  agent_id          Int?
+  agent_email       String?   @db.VarChar(255)
+  agent_name        String?   @db.VarChar(255)
+  customer_id       Int?
+  customer_email    String?   @db.VarChar(255)
+  customer_name     String?   @db.VarChar(255)
+  company_id        Int?
+  supplier_name     String?   @db.VarChar(255)
+  supplier_country  String?   @db.VarChar(100)
+  buyer_name        String?   @db.VarChar(255)
+  buyer_country     String?   @db.VarChar(100)
+  product_type      String    @db.VarChar(100)
+  facility_amount   Decimal?  @db.Decimal(15, 2)
+  currency          String?   @default("USD") @db.VarChar(10)
+  advance_rate      Decimal?  @db.Decimal(5, 2)
+  discount_rate     Decimal?  @db.Decimal(5, 4)
+  interest_rate     Decimal?  @db.Decimal(5, 4)
+  setup_fee         Decimal?  @db.Decimal(15, 2)
+  management_fee    Decimal?  @db.Decimal(15, 2)
+  rebate_percentage Decimal?  @db.Decimal(5, 2)
+  tenor_days        Int?
+  credit_limit      Decimal?  @db.Decimal(15, 2)
+  validity_days     Int?      @default(30)
+  valid_until       DateTime? @db.Date
+  status            String?   @default("draft") @db.VarChar(50)
+  terms_data        Json?
+  pricing_data      Json?
+  conditions        Json?
+  created_at        DateTime? @default(now()) @db.Timestamp(6)
+  updated_at        DateTime? @default(now()) @db.Timestamp(6)
+  submitted_at      DateTime? @db.Timestamp(6)
+  approved_at       DateTime? @db.Timestamp(6)
+  declined_at       DateTime? @db.Timestamp(6)
+  notes             String?
+  status_history    Json?     @default("[]")
+  opportunity_id    Int?
+  created_by        Int?
+  data              Json?
+  invoice_id        Int?
+
+  @@index([agent_id], map: "idx_termsheets_agent_id")
+  @@index([company_id], map: "idx_termsheets_company_id")
+  @@index([created_at], map: "idx_termsheets_created_at")
+  @@index([customer_id], map: "idx_termsheets_customer_id")
+  @@index([lead_id], map: "idx_termsheets_lead_id")
+  @@index([opportunity_id], map: "idx_termsheets_opportunity_id")
+  @@index([product_type], map: "idx_termsheets_product_type")
+  @@index([status], map: "idx_termsheets_status")
+  @@index([termsheet_number], map: "idx_termsheets_termsheet_number")
+}
+
+model trade_analysis_records {
+  id                          Int                           @id @default(autoincrement())
+  user_id                     Int?
+  company_id                  Int?
+  file_name                   String?                       @db.VarChar(255)
+  file_path                   String?
+  status                      String?                       @default("pending") @db.VarChar(50)
+  analysis_result             Json?
+  trade_score                 Int?
+  created_at                  DateTime?                     @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime?                     @default(now()) @db.Timestamp(6)
+  agent_status                Int?                          @default(-2)
+  agent_status_label          String?                       @default("Pending") @db.VarChar(50)
+  decision                    String?                       @db.VarChar(20)
+  decision_by                 Int?
+  decision_at                 DateTime?                     @db.Timestamptz(6)
+  signature_data              String?
+  signature_name              String?                       @db.VarChar(255)
+  signature_title             String?                       @db.VarChar(255)
+  uploaded_documents          Json?                         @default("[]")
+  user_email                  String?                       @db.VarChar(255)
+  user_company_id             Int?
+  user_company_name           String?                       @db.VarChar(255)
+  relationship_map_id         Int?
+  buyer_name                  String?                       @db.VarChar(255)
+  supplier_name               String?                       @db.VarChar(255)
+  tenant_id                   Int?                          @default(1)
+  created_by                  Int?
+  created_by_name             String?                       @db.VarChar(255)
+  reviewed_by                 Int?
+  reviewed_at                 DateTime?                     @db.Timestamptz(6)
+  review_notes                String?
+  record_reference            String?                       @db.VarChar(50)
+  entity_type                 String?                       @default("buyer") @db.VarChar(20)
+  entity_id                   Int?
+  entity_name                 String?                       @db.VarChar(255)
+  trade_partner_id            Int?
+  overall_risk                String?                       @default("MEDIUM") @db.VarChar(20)
+  risk_score                  Int?                          @default(0)
+  total_documents             Int?                          @default(0)
+  total_transactions          Int?                          @default(0)
+  total_value                 Decimal?                      @default(0) @db.Decimal(18, 2)
+  currency                    String?                       @default("USD") @db.VarChar(10)
+  documents_summary           Json?                         @default("[]")
+  risk_findings               Json?                         @default("[]")
+  metrics                     Json?                         @default("{}")
+  analyzed_years              Int[]
+  analysis_date               DateTime?                     @default(now()) @db.Timestamptz(6)
+  trade_analysis_status_audit trade_analysis_status_audit[]
+
+  @@index([agent_status], map: "idx_trade_analysis_agent_status")
+  @@index([company_id], map: "idx_trade_analysis_company")
+  @@index([decision], map: "idx_trade_analysis_decision")
+  @@index([user_id], map: "idx_trade_analysis_user")
+}
+
+model trade_analysis_status_audit {
+  id                     Int                     @id @default(autoincrement())
+  trade_record_id        Int?
+  old_status             String?                 @db.VarChar(50)
+  new_status             String?                 @db.VarChar(50)
+  changed_by             Int?
+  reason                 String?
+  created_at             DateTime?               @default(now()) @db.Timestamp(6)
+  record_id              Int?
+  trade_analysis_records trade_analysis_records? @relation(fields: [record_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([record_id], map: "idx_trade_analysis_status_audit_record")
+}
+
+model trade_doc_documents {
+  id               Int       @id @default(autoincrement())
+  verification_id  Int?
+  document_type    String?   @db.VarChar(100)
+  file_name        String?   @db.VarChar(255)
+  file_path        String?
+  extracted_data   Json?
+  confidence_score Decimal?  @db.Decimal(5, 4)
+  created_at       DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model trade_doc_status_audit {
+  id              Int       @id @default(autoincrement())
+  verification_id Int?
+  old_status      String?   @db.VarChar(50)
+  new_status      String?   @db.VarChar(50)
+  changed_by      Int?
+  reason          String?
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model trade_doc_verifications {
+  id                Int       @id @default(autoincrement())
+  user_id           Int?
+  company_id        Int?
+  verification_code String?   @db.VarChar(100)
+  status            String?   @default("pending") @db.VarChar(50)
+  overall_score     Int?
+  result            Json?
+  created_at        DateTime? @default(now()) @db.Timestamp(6)
+  updated_at        DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([user_id], map: "idx_trade_doc_verifications_user")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model trade_partner {
+  id                          Int                           @id @default(autoincrement())
+  user_id                     Int?
+  company_id                  Int?
+  name                        String?
+  partner_name                String?                       @db.VarChar(255)
+  tp_type                     String?
+  registration_no             String?
+  registration_number         String?                       @db.VarChar(100)
+  country                     String?                       @db.VarChar(100)
+  industry                    String?
+  address                     String?
+  city                        String?                       @db.VarChar(100)
+  postal_code                 String?                       @db.VarChar(20)
+  phone                       String?                       @db.VarChar(50)
+  email                       String?                       @db.VarChar(255)
+  website                     String?                       @db.VarChar(255)
+  contact_person              String?                       @db.VarChar(255)
+  goods_and_services          String?
+  annual_turnover             Decimal?                      @db.Decimal
+  average_tenor               String?
+  currency                    String?
+  financing_requested         String?
+  relationship_start_date     DateTime?                     @db.Date
+  kyc_status                  String?
+  credit_limit                Decimal?                      @db.Decimal
+  status                      String?                       @default("active") @db.VarChar(50)
+  created_at                  DateTime?                     @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime?                     @default(now()) @db.Timestamp(6)
+  product_source              String?                       @default("haliflow") @db.VarChar(50)
+  tenant_id                   Int?
+  halitrade_contracts         halitrade_contracts[]
+  halitrade_letters_of_credit halitrade_letters_of_credit[]
+  halitrade_shipments         halitrade_shipments[]
+  invoice_analysis            invoice_analysis[]
+  invoice_financing_reviews   invoice_financing_reviews[]
+  invoices                    invoices[]
+  kyc                         kyc[]
+  referral_submissions        referral_submissions[]
+  relationship_map            relationship_map[]
+  relationship_map_audit_log  relationship_map_audit_log[]
+  wallets                     wallets[]
+
+  @@index([company_id], map: "idx_trade_partner_company_id")
+  @@index([product_source], map: "idx_trade_partner_product_source")
+  @@index([tenant_id], map: "idx_trade_partner_tenant_id")
+  @@index([user_id], map: "idx_trade_partner_user_id")
+}
+
+model trade_partner_address {
+  id               Int     @id @default(autoincrement())
+  trade_partner_id Int
+  line1            String
+  line2            String?
+  city             String?
+  state            String?
+  postal_code      String?
+  country          String?
+  type             String?
+}
+
+model trade_partner_contact {
+  id               Int     @id @default(autoincrement())
+  trade_partner_id Int
+  name             String
+  email            String?
+  phone            String?
+  role             String?
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model transaction_audit_log {
+  id                    Int       @id @default(autoincrement())
+  transaction_id        Int
+  transaction_type      String    @db.VarChar(20)
+  transaction_reference String?   @db.VarChar(50)
+  wallet_id             Int?
+  action                String    @db.VarChar(50)
+  performed_by          Int?
+  performed_by_email    String?   @db.VarChar(255)
+  performed_by_role     String?   @db.VarChar(50)
+  field_changed         String?   @db.VarChar(100)
+  old_value             String?
+  new_value             String?
+  changes_summary       Json?
+  notes                 String?
+  ip_address            String?   @db.VarChar(45)
+  user_agent            String?
+  created_at            DateTime? @default(now()) @db.Timestamp(6)
+  users                 User?     @relation(fields: [performed_by], references: [id], onUpdate: NoAction)
+  wallets               wallets?  @relation(fields: [wallet_id], references: [id], onUpdate: NoAction)
+
+  @@index([action], map: "idx_tx_audit_action")
+  @@index([created_at(sort: Desc)], map: "idx_tx_audit_created_at")
+  @@index([performed_by], map: "idx_tx_audit_performed_by")
+  @@index([transaction_id, transaction_type], map: "idx_tx_audit_transaction")
+  @@index([transaction_type], map: "idx_tx_audit_type")
+  @@index([wallet_id], map: "idx_tx_audit_wallet")
+}
+
+model user_permissions {
+  user_id                                  Int
+  tenant_id                                Int
+  role_id                                  Int?
+  permission_set_id                        Int
+  granted_by                               Int?
+  granted_at                               DateTime?           @default(now()) @db.Timestamp(6)
+  users_user_permissions_granted_byTousers User?               @relation("user_permissions_granted_byTousers", fields: [granted_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  permission_sets                          permission_sets     @relation(fields: [permission_set_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  white_label_tenants                      white_label_tenants @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_user_permissions_user_idTousers    User                @relation("user_permissions_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([user_id, tenant_id, permission_set_id])
+  @@index([tenant_id], map: "idx_user_permissions_tenant_id")
+  @@index([user_id], map: "idx_user_permissions_user")
+  @@index([user_id], map: "idx_user_permissions_user_id")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model user_quota {
+  id           Int       @id @default(autoincrement())
+  user_id      Int?
+  tenant_id    Int?      @default(1)
+  plan         String?   @default("FREE") @db.VarChar(50)
+  quota_limit  Int?      @default(100)
+  quota_used   Int?      @default(0)
+  period_start DateTime? @default(dbgenerated("date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone)")) @db.Date
+  period_end   DateTime? @default(dbgenerated("(((date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone) + '1 mon'::interval) - '1 day'::interval))::date")) @db.Date
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  updated_at   DateTime? @default(now()) @db.Timestamp(6)
+  email        String?   @db.VarChar(255)
+  module       String?   @default("global") @db.VarChar(50)
+
+  @@index([email], map: "idx_quota_email")
+  @@index([user_id], map: "idx_user_quota_email")
+  @@index([email, module], map: "idx_user_quota_email_module")
+  @@index([tenant_id], map: "idx_user_quota_tenant")
+  @@index([user_id, period_start], map: "idx_user_quota_user_period")
+}
+
+model user_sessions {
+  id            Int       @id @default(autoincrement())
+  session_id    String    @unique @db.VarChar(255)
+  email         String    @db.VarChar(255)
+  user_id       Int?
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  last_accessed DateTime? @default(now()) @db.Timestamp(6)
+  expires_at    DateTime? @default(dbgenerated("(now() + '30 days'::interval)")) @db.Timestamp(6)
+  users         User?     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([email], map: "idx_sessions_email")
+  @@index([session_id], map: "idx_sessions_session_id")
+}
+
+model user_subscriptions {
+  id                   Int       @id @default(autoincrement())
+  user_id              Int?
+  email                String    @db.VarChar(255)
+  plan_id              String?   @db.VarChar(50)
+  status               String?   @default("active") @db.VarChar(50)
+  current_period_start DateTime? @default(dbgenerated("CURRENT_DATE")) @db.Date
+  current_period_end   DateTime? @default(dbgenerated("((CURRENT_DATE + '1 mon'::interval))::date")) @db.Date
+  cancel_at_period_end Boolean?  @default(false)
+  created_at           DateTime? @default(now()) @db.Timestamp(6)
+  updated_at           DateTime? @default(now()) @db.Timestamp(6)
+  module               String?   @default("global") @db.VarChar(50)
+  users                User?     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, current_period_start])
+  @@index([email, module], map: "idx_user_subscriptions_email_module")
+  @@index([user_id], map: "idx_user_subscriptions_user")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model validation_queue {
+  id                  Int                 @id @default(autoincrement())
+  entity_type         String              @db.VarChar(50)
+  entity_id           Int
+  company_id          Int?
+  customer_id         Int?
+  customer_name       String?             @db.VarChar(255)
+  status              String?             @default("pending") @db.VarChar(50)
+  submitted_at        DateTime?           @default(now()) @db.Timestamp(6)
+  submitted_by        Int?
+  assigned_to         Int?
+  assigned_to_name    String?             @db.VarChar(255)
+  assigned_at         DateTime?           @db.Timestamp(6)
+  reviewed_by         String?             @db.VarChar(255)
+  updated_at          DateTime?           @default(now()) @db.Timestamp(6)
+  data                Json?
+  previous_data       Json?
+  comments            Json?               @default("[]")
+  created_at          DateTime?           @default(now()) @db.Timestamp(6)
+  contract_status     String?             @db.VarChar(50)
+  termsheet           Json?
+  user_id             Int?
+  submission_id       String              @unique @db.VarChar(20)
+  file_data           Bytes?
+  file_type           String?             @db.VarChar(100)
+  opportunity_id      Int?
+  tenant_id           Int
+  metadata            Json?
+  opportunities       opportunities?      @relation(fields: [opportunity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  white_label_tenants white_label_tenants @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([assigned_to], map: "idx_validation_assigned")
+  @@index([company_id], map: "idx_validation_company")
+  @@index([contract_status], map: "idx_validation_contract_status")
+  @@index([customer_id], map: "idx_validation_customer")
+  @@index([opportunity_id], map: "idx_validation_queue_opportunity_id")
+  @@index([tenant_id], map: "idx_validation_queue_tenant")
+  @@index([tenant_id], map: "idx_validation_queue_tenant_id")
+  @@index([status], map: "idx_validation_status")
+  @@index([submission_id], map: "idx_validation_submission_id")
+  @@index([user_id], map: "idx_validation_user")
+}
+
+model wallet_transactions {
+  id                  Int                  @id @default(autoincrement())
+  wallet_id           Int?
+  amount              Decimal?             @db.Decimal
+  currency            String?              @db.VarChar(10)
+  type                String?
+  status              String?
+  created_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  tenant_id           Int?
+  cancelled           Boolean?             @default(false)
+  reference_type      String?
+  reference_id        String?
+  description         String?
+  balance_after       Decimal?             @default(0) @db.Decimal(15, 2)
+  balance_before      Decimal?             @db.Decimal(15, 2)
+  fee                 Decimal?             @default(0) @db.Decimal(15, 2)
+  metadata            Json?
+  cancelled_at        DateTime?            @db.Timestamp(6)
+  cancelled_by        Int?
+  white_label_tenants white_label_tenants? @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([tenant_id], map: "idx_wallet_transactions_tenant_id")
+  @@index([reference_type, reference_id], map: "idx_wallet_tx_reference")
+  @@index([type], map: "idx_wallet_tx_type")
+}
+
+model wallets {
+  id                                                                Int                      @id @default(autoincrement())
+  user_id                                                           Int?
+  type                                                              String                   @db.VarChar(50)
+  balance                                                           Decimal?                 @default(0.00) @db.Decimal(15, 2)
+  currency                                                          String?                  @default("USD") @db.VarChar(10)
+  created_at                                                        DateTime?                @default(now()) @db.Timestamp(6)
+  updated_at                                                        DateTime?                @default(now()) @db.Timestamp(6)
+  reserved_balance                                                  Decimal?                 @default(0.00) @db.Decimal(15, 2)
+  company_id                                                        Int?
+  trade_partner_id                                                  Int?
+  entity_type                                                       String?                  @db.VarChar(50)
+  status                                                            String?                  @default("active") @db.VarChar(50)
+  tenant_id                                                         Int?
+  bank_account_audit_log                                            bank_account_audit_log[]
+  bank_accounts                                                     bank_accounts[]
+  deposits                                                          deposits[]
+  invoice_allocations                                               invoice_allocations[]
+  ledger_transactions_ledger_transactions_credit_wallet_idTowallets ledger_transactions[]    @relation("ledger_transactions_credit_wallet_idTowallets")
+  ledger_transactions_ledger_transactions_debit_wallet_idTowallets  ledger_transactions[]    @relation("ledger_transactions_debit_wallet_idTowallets")
+  transaction_audit_log                                             transaction_audit_log[]
+  company                                                           company?                 @relation(fields: [company_id], references: [id], onUpdate: NoAction)
+  white_label_tenants                                               white_label_tenants?     @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  trade_partner                                                     trade_partner?           @relation(fields: [trade_partner_id], references: [id], onUpdate: NoAction)
+  users                                                             User?                    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  withdrawal_requests                                               withdrawal_requests[]
+
+  @@index([company_id], map: "idx_wallets_company_id")
+  @@index([entity_type], map: "idx_wallets_entity_type")
+  @@index([tenant_id], map: "idx_wallets_tenant")
+  @@index([tenant_id], map: "idx_wallets_tenant_id")
+  @@index([trade_partner_id], map: "idx_wallets_trade_partner_id")
+  @@index([type], map: "idx_wallets_type")
+  @@index([user_id], map: "idx_wallets_user_id")
+}
+
+model white_label_audit_log {
+  id                  Int                  @id @default(autoincrement())
+  tenant_id           Int?
+  user_id             Int?
+  action              String               @db.VarChar(100)
+  entity_type         String?              @db.VarChar(100)
+  entity_id           Int?
+  old_values          Json?
+  new_values          Json?
+  ip_address          String?              @db.Inet
+  user_agent          String?
+  created_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  white_label_tenants white_label_tenants? @relation(fields: [tenant_id], references: [id], onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model white_label_document_templates {
+  id                  Int                  @id @default(autoincrement())
+  tenant_id           Int?
+  template_key        String               @db.VarChar(100)
+  template_name       String               @db.VarChar(255)
+  header_html         String?
+  footer_html         String?
+  letterhead_url      String?
+  watermark_url       String?
+  watermark_opacity   Decimal?             @default(0.1) @db.Decimal(3, 2)
+  styles              Json?                @default("{}")
+  is_active           Boolean?             @default(true)
+  created_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  template_type       String?              @db.VarChar(100)
+  content             String?
+  variables           Json?
+  white_label_tenants white_label_tenants? @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenant_id, template_key])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model white_label_email_templates {
+  id                  Int                  @id @default(autoincrement())
+  tenant_id           Int?
+  template_key        String               @db.VarChar(100)
+  subject             String               @db.VarChar(500)
+  html_body           String
+  text_body           String?
+  variables           Json?                @default("[]")
+  is_active           Boolean?             @default(true)
+  created_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  template_type       String?              @db.VarChar(100)
+  body                String?
+  white_label_tenants white_label_tenants? @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenant_id, template_key])
+}
+
+model white_label_tenant_companies {
+  id                  Int                  @id @default(autoincrement())
+  tenant_id           Int?
+  company_id          Int
+  created_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  white_label_tenants white_label_tenants? @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenant_id, company_id])
+}
+
+model white_label_tenant_users {
+  id                  Int                  @id @default(autoincrement())
+  tenant_id           Int?
+  user_id             Int
+  role                String?              @default("user") @db.VarChar(50)
+  created_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  permissions         Json?
+  white_label_tenants white_label_tenants? @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenant_id, user_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model white_label_tenants {
+  id                                                                          Int                              @id @default(autoincrement())
+  tenant_code                                                                 String                           @unique @db.VarChar(50)
+  company_name                                                                String                           @db.VarChar(255)
+  legal_name                                                                  String?                          @db.VarChar(255)
+  custom_domain                                                               String?                          @db.VarChar(255)
+  subdomain                                                                   String?                          @db.VarChar(100)
+  primary_color                                                               String?                          @default("#DC2626") @db.VarChar(7)
+  secondary_color                                                             String?                          @default("#B91C1C") @db.VarChar(7)
+  accent_color                                                                String?                          @default("#EF4444") @db.VarChar(7)
+  background_color                                                            String?                          @default("#111827") @db.VarChar(7)
+  text_color                                                                  String?                          @default("#FFFFFF") @db.VarChar(7)
+  logo_url                                                                    String?
+  logo_dark_url                                                               String?
+  favicon_url                                                                 String?
+  email_logo_url                                                              String?
+  login_bg_image_url                                                          String?
+  tagline                                                                     String?                          @default("Trade Finance Platform") @db.VarChar(255)
+  powered_by                                                                  String?                          @default("powered by HaliSoft") @db.VarChar(255)
+  footer_text                                                                 String?
+  email_from_name                                                             String?                          @db.VarChar(255)
+  email_from_address                                                          String?                          @db.VarChar(255)
+  email_reply_to                                                              String?                          @db.VarChar(255)
+  use_custom_emails                                                           Boolean?                         @default(true)
+  features                                                                    Json?                            @default("{\"showChat\": true, \"showWallet\": true, \"showAnalytics\": true, \"showDocuments\": true, \"showFactoring\": true, \"showInvestments\": true, \"showMarketplace\": true, \"allowAgentSignup\": true, \"allowCustomerSignup\": true, \"allowInvestorSignup\": true}")
+  component_names                                                             Json?                            @default("{\"HaliDoc\": \"Document Center\", \"HaliFlow\": \"Application Process\", \"HaliPass\": \"Secure Login\", \"HaliAgent\": \"AI Assistant\", \"HaliScore\": \"Credit Assessment\", \"HaliVault\": \"Document Vault\"}")
+  support_email                                                               String?                          @db.VarChar(255)
+  support_phone                                                               String?                          @db.VarChar(50)
+  website_url                                                                 String?                          @db.VarChar(255)
+  address_line1                                                               String?                          @db.VarChar(255)
+  address_line2                                                               String?                          @db.VarChar(255)
+  city                                                                        String?                          @db.VarChar(100)
+  state                                                                       String?                          @db.VarChar(100)
+  postal_code                                                                 String?                          @db.VarChar(20)
+  country                                                                     String?                          @db.VarChar(100)
+  social_links                                                                Json?                            @default("{}")
+  is_active                                                                   Boolean?                         @default(true)
+  is_default                                                                  Boolean?                         @default(false)
+  created_at                                                                  DateTime?                        @default(now()) @db.Timestamptz(6)
+  updated_at                                                                  DateTime?                        @default(now()) @db.Timestamptz(6)
+  type                                                                        String?                          @db.VarChar
+  settings                                                                    Json?                            @default("{}")
+  parent_tenant_id                                                            Int?
+  commission_rate                                                             Decimal?                         @default(0.00) @db.Decimal(5, 2)
+  status                                                                      String?                          @default("active") @db.VarChar
+  name                                                                        String?                          @db.VarChar(255)
+  slug                                                                        String?                          @db.VarChar(100)
+  domain                                                                      String?                          @db.VarChar(255)
+  address                                                                     String?
+  letterhead_logo_url                                                         String?
+  letterhead_company_name                                                     String?
+  letterhead_tagline                                                          String?
+  letterhead_registration_number                                              String?
+  letterhead_tax_registration                                                 String?
+  letterhead_signatory_name                                                   String?
+  letterhead_signatory_title                                                  String?
+  letterhead_address                                                          String?
+  letterhead_city                                                             String?
+  letterhead_country                                                          String?
+  letterhead_phone                                                            String?
+  letterhead_email                                                            String?
+  letterhead_website                                                          String?
+  letterhead_header_gradient_start                                            String?
+  letterhead_header_gradient_end                                              String?
+  letterhead_footer_color                                                     String?
+  agent_commissions_agent_commissions_agent_tenant_idTowhite_label_tenants    agent_commissions[]              @relation("agent_commissions_agent_tenant_idTowhite_label_tenants")
+  agent_commissions_agent_commissions_customer_tenant_idTowhite_label_tenants agent_commissions[]              @relation("agent_commissions_customer_tenant_idTowhite_label_tenants")
+  agent_referrals_agent_referrals_agent_tenant_idTowhite_label_tenants        agent_referrals[]                @relation("agent_referrals_agent_tenant_idTowhite_label_tenants")
+  agent_referrals_agent_referrals_customer_tenant_idTowhite_label_tenants     agent_referrals[]                @relation("agent_referrals_customer_tenant_idTowhite_label_tenants")
+  bank_accounts                                                               bank_accounts[]
+  buyer_magic_links                                                           buyer_magic_links[]
+  company_company_agent_tenant_idTowhite_label_tenants                        company[]                        @relation("company_agent_tenant_idTowhite_label_tenants")
+  company_company_platform_tenant_idTowhite_label_tenants                     company[]                        @relation("company_platform_tenant_idTowhite_label_tenants")
+  deposits                                                                    deposits[]
+  invoice_allocations                                                         invoice_allocations[]
+  invoice_financing_reviews                                                   invoice_financing_reviews[]
+  invoices_invoices_agent_tenant_idTowhite_label_tenants                      invoices[]                       @relation("invoices_agent_tenant_idTowhite_label_tenants")
+  invoices_invoices_platform_tenant_idTowhite_label_tenants                   invoices[]                       @relation("invoices_platform_tenant_idTowhite_label_tenants")
+  opportunities_opportunities_agent_tenant_idTowhite_label_tenants            opportunities[]                  @relation("opportunities_agent_tenant_idTowhite_label_tenants")
+  opportunities_opportunities_platform_tenant_idTowhite_label_tenants         opportunities[]                  @relation("opportunities_platform_tenant_idTowhite_label_tenants")
+  opportunities_opportunities_tenant_idTowhite_label_tenants                  opportunities[]                  @relation("opportunities_tenant_idTowhite_label_tenants")
+  record_shares                                                               record_shares[]
+  user_permissions                                                            user_permissions[]
+  users                                                                       User[]
+  validation_queue                                                            validation_queue[]
+  wallet_transactions                                                         wallet_transactions[]
+  wallets                                                                     wallets[]
+  white_label_audit_log                                                       white_label_audit_log[]
+  white_label_document_templates                                              white_label_document_templates[]
+  white_label_email_templates                                                 white_label_email_templates[]
+  white_label_tenant_companies                                                white_label_tenant_companies[]
+  white_label_tenant_users                                                    white_label_tenant_users[]
+  white_label_tenants                                                         white_label_tenants?             @relation("white_label_tenantsTowhite_label_tenants", fields: [parent_tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_white_label_tenants                                                   white_label_tenants[]            @relation("white_label_tenantsTowhite_label_tenants")
+  withdrawal_requests                                                         withdrawal_requests[]
+
+  @@index([is_active], map: "idx_white_label_active")
+  @@index([custom_domain], map: "idx_white_label_custom_domain")
+  @@index([subdomain], map: "idx_white_label_subdomain")
+  @@index([tenant_code], map: "idx_white_label_tenant_code")
+  @@index([status], map: "idx_white_label_tenants_status")
+  @@index([type], map: "idx_white_label_tenants_type")
+}
+
+model withdrawal_requests {
+  id                  Int                  @id @default(autoincrement())
+  wallet_id           Int?
+  amount              Decimal              @db.Decimal(15, 2)
+  currency            String?              @default("USD") @db.VarChar(3)
+  bank_details        Json?
+  status              String?              @default("pending") @db.VarChar(20)
+  reference_number    String?              @unique @db.VarChar(20)
+  created_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?            @default(now()) @db.Timestamptz(6)
+  approved_at         DateTime?            @db.Timestamptz(6)
+  declined_at         DateTime?            @db.Timestamptz(6)
+  admin_note          String?
+  idempotency_key     String?              @db.VarChar(255)
+  tenant_id           Int?
+  bank_name           String?              @db.VarChar(255)
+  account_number      String?              @db.VarChar(100)
+  swift_code          String?              @db.VarChar(20)
+  processed_at        DateTime?            @db.Timestamptz(6)
+  white_label_tenants white_label_tenants? @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  wallets             wallets?             @relation(fields: [wallet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([wallet_id, idempotency_key], map: "idx_withdrawal_requests_wallet_idempotency")
+  @@index([tenant_id], map: "idx_withdrawal_requests_tenant_id")
+  @@index([wallet_id], map: "idx_withdrawal_requests_wallet_id")
 }
